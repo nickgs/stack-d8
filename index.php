@@ -37,6 +37,12 @@ catch (Exception $e) {
     $message .= " or run the <a href=\"$rebuild_path\">rebuild script</a>";
   }
 
+  //redirect to installer if we aren't yet installed and we are on stackstarter
+  if (isset($_SERVER['STACKSTARTER_ENV']) && function_exists('db_table_exists') && !db_table_exists('sessions') && $_SERVER['SCRIPT_NAME'] != '/core/install.php') {
+    include_once __DIR__ . '/core/includes/install.inc';
+    install_goto('core/install.php');
+  }
+
   // Set the response code manually. Otherwise, this response will default to a
   // 200.
   http_response_code(500);
