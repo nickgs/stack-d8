@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -9,7 +9,7 @@ label: test_filter_group_override
 module: views
 description: ''
 tag: default
-base_table: node
+base_table: node_field_data
 base_field: nid
 core: '8'
 display:
@@ -30,7 +30,7 @@ display:
           id: title
           label: ''
           table: node_field_data
-          plugin_id: node
+          plugin_id: field
           entity_type: node
           entity_field: title
       filters:
@@ -53,8 +53,6 @@ display:
         type: default
       row:
         type: fields
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default
@@ -62,8 +60,6 @@ display:
   page_1:
     display_options:
       path: test
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: page
     display_title: Page
     id: page_1

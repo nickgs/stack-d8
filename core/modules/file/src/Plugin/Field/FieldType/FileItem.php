@@ -23,6 +23,7 @@ use Drupal\Core\TypedData\DataDefinition;
  *   id = "file",
  *   label = @Translation("File"),
  *   description = @Translation("This field stores the ID of a file as an integer value."),
+ *   category = @Translation("Reference"),
  *   default_widget = "file_generic",
  *   default_formatter = "file_default",
  *   list_class = "\Drupal\file\Plugin\Field\FieldType\FileFieldItemList",
@@ -127,7 +128,7 @@ class FileItem extends EntityReferenceItem {
       '#description' => t('This setting only has an effect if the display option is enabled.'),
       '#states' => array(
         'visible' => array(
-          ':input[name="field_storage[settings][display_field]"]' => array('checked' => TRUE),
+          ':input[name="settings[display_field]"]' => array('checked' => TRUE),
         ),
       ),
     );

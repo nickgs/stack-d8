@@ -75,7 +75,7 @@ class DateTimeFieldTest extends WebTestBase {
     ));
     $this->field->save();
 
-    entity_get_form_display($this->field->entity_type, $this->field->bundle, 'default')
+    entity_get_form_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'default')
       ->setComponent($field_name, array(
         'type' => 'datetime_default',
       ))
@@ -86,7 +86,7 @@ class DateTimeFieldTest extends WebTestBase {
       'label' => 'hidden',
       'settings' => array('format_type' => 'medium'),
     );
-    entity_get_display($this->field->entity_type, $this->field->bundle, 'full')
+    entity_get_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'full')
       ->setComponent($field_name, $this->displayOptions)
       ->save();
   }
@@ -95,7 +95,7 @@ class DateTimeFieldTest extends WebTestBase {
    * Tests date field functionality.
    */
   function testDateField() {
-    $field_name = $this->fieldStorage->field_name;
+    $field_name = $this->fieldStorage->getName();
 
     // Display creation form.
     $this->drupalGet('entity_test/add');
@@ -130,7 +130,7 @@ class DateTimeFieldTest extends WebTestBase {
       foreach ($values as $new_value) {
         // Update the entity display settings.
         $this->displayOptions['settings'] = array($setting => $new_value);
-        entity_get_display($this->field->entity_type, $this->field->bundle, 'full')
+        entity_get_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'full')
           ->setComponent($field_name, $this->displayOptions)
           ->save();
 
@@ -149,7 +149,7 @@ class DateTimeFieldTest extends WebTestBase {
     // Verify that the plain formatter works.
     $this->displayOptions['type'] = 'datetime_plain';
     $this->displayOptions['settings'] = array();
-    entity_get_display($this->field->entity_type, $this->field->bundle, 'full')
+    entity_get_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'full')
       ->setComponent($field_name, $this->displayOptions)
       ->save();
     $expected = $date->format(DATETIME_DATE_STORAGE_FORMAT);
@@ -163,7 +163,7 @@ class DateTimeFieldTest extends WebTestBase {
   function testDatetimeField() {
     $field_name = $this->fieldStorage->getName();
     // Change the field to a datetime field.
-    $this->fieldStorage->settings['datetime_type'] = 'datetime';
+    $this->fieldStorage->setSetting('datetime_type', 'datetime');
     $this->fieldStorage->save();
 
     // Display creation form.
@@ -196,7 +196,7 @@ class DateTimeFieldTest extends WebTestBase {
       foreach ($values as $new_value) {
         // Update the entity display settings.
         $this->displayOptions['settings'] = array($setting => $new_value);
-        entity_get_display($this->field->entity_type, $this->field->bundle, 'full')
+        entity_get_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'full')
           ->setComponent($field_name, $this->displayOptions)
           ->save();
 
@@ -215,7 +215,7 @@ class DateTimeFieldTest extends WebTestBase {
     // Verify that the plain formatter works.
     $this->displayOptions['type'] = 'datetime_plain';
     $this->displayOptions['settings'] = array();
-    entity_get_display($this->field->entity_type, $this->field->bundle, 'full')
+    entity_get_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'full')
       ->setComponent($field_name, $this->displayOptions)
       ->save();
     $expected = $date->format(DATETIME_DATETIME_STORAGE_FORMAT);
@@ -229,11 +229,11 @@ class DateTimeFieldTest extends WebTestBase {
   function testDatelistWidget() {
     $field_name = $this->fieldStorage->getName();
     // Change the field to a datetime field.
-    $this->fieldStorage->settings['datetime_type'] = 'datetime';
+    $this->fieldStorage->setSetting('datetime_type', 'datetime');
     $this->fieldStorage->save();
 
     // Change the widget to a datelist widget.
-    entity_get_form_display($this->field->entity_type, $this->field->bundle, 'default')
+    entity_get_form_display($this->field->getTargetEntityTypeId(), $this->field->getTargetBundle(), 'default')
       ->setComponent($field_name, array(
         'type' => 'datetime_datelist',
         'settings' => array(
@@ -384,7 +384,7 @@ class DateTimeFieldTest extends WebTestBase {
 
     // Create a new node to check that datetime field default value is not set.
     $new_node = entity_create('node', array('type' => 'date_content'));
-    $this->assertNull($new_node->get($field_name)->offsetGet(0)->value, 'Default value is not set');
+    $this->assertNull($new_node->get($field_name)->value, 'Default value is not set');
   }
 
   /**
@@ -393,7 +393,7 @@ class DateTimeFieldTest extends WebTestBase {
   function testInvalidField() {
 
     // Change the field to a datetime field.
-    $this->fieldStorage->settings['datetime_type'] = 'datetime';
+    $this->fieldStorage->setSetting('datetime_type', 'datetime');
     $this->fieldStorage->save();
     $field_name = $this->fieldStorage->getName();
 
@@ -491,7 +491,7 @@ class DateTimeFieldTest extends WebTestBase {
     $display = EntityViewDisplay::collectRenderDisplay($entity, $view_mode);
     $build = $display->build($entity);
     $output = drupal_render($build);
-    $this->drupalSetContent($output);
+    $this->setRawContent($output);
     $this->verbose($output);
   }
 

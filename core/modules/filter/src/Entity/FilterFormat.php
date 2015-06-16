@@ -41,6 +41,13 @@ use Drupal\filter\Plugin\FilterInterface;
  *   links = {
  *     "edit-form" = "/admin/config/content/formats/manage/{filter_format}",
  *     "disable" = "/admin/config/content/formats/manage/{filter_format}/disable"
+ *   },
+ *   config_export = {
+ *     "name",
+ *     "format",
+ *     "weight",
+ *     "roles",
+ *     "filters",
  *   }
  * )
  */
@@ -400,7 +407,7 @@ class FilterFormat extends ConfigEntityBase implements FilterFormatInterface, En
    * {@inheritdoc}
    */
   public function onDependencyRemoval(array $dependencies) {
-    $changed = FALSE;
+    $changed = parent::onDependencyRemoval($dependencies);
     $filters = $this->filters();
     foreach ($filters as $filter) {
       // Remove disabled filters, so that this FilterFormat config entity can
@@ -410,9 +417,7 @@ class FilterFormat extends ConfigEntityBase implements FilterFormatInterface, En
         $changed = TRUE;
       }
     }
-    if ($changed) {
-      $this->save();
-    }
+    return $changed;
   }
 
   /**

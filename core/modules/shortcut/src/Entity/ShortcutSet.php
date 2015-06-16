@@ -40,6 +40,10 @@ use Drupal\shortcut\ShortcutSetInterface;
  *     "delete-form" = "/admin/config/user-interface/shortcut/manage/{shortcut_set}/delete",
  *     "edit-form" = "/admin/config/user-interface/shortcut/manage/{shortcut_set}",
  *     "collection" = "/admin/config/user-interface/shortcut",
+ *   },
+ *   config_export = {
+ *     "id",
+ *     "label",
  *   }
  * )
  */
@@ -117,7 +121,9 @@ class ShortcutSet extends ConfigEntityBase implements ShortcutSetInterface {
    * {@inheritdoc}
    */
   public function getShortcuts() {
-    return \Drupal::entityManager()->getStorage('shortcut')->loadByProperties(array('shortcut_set' => $this->id()));
+    $shortcuts = \Drupal::entityManager()->getStorage('shortcut')->loadByProperties(array('shortcut_set' => $this->id()));
+    uasort($shortcuts, array('\Drupal\shortcut\Entity\Shortcut', 'sort'));
+    return $shortcuts;
   }
 
 }

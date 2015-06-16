@@ -75,11 +75,23 @@ class FieldCrudTest extends FieldUnitTestBase {
     $field = entity_create('field_config', $this->fieldDefinition);
     $field->save();
 
+    $field = FieldConfig::load($field->id());
+    $this->assertTrue($field->getSetting('field_setting_from_config_data'));
+    $this->assertNull($field->getSetting('config_data_from_field_setting'));
+
     // Read the configuration. Check against raw configuration data rather than
     // the loaded ConfigEntity, to be sure we check that the defaults are
     // applied on write.
     $config = $this->config('field.field.' . $field->id())->get();
     $field_type_manager = \Drupal::service('plugin.manager.field.field_type');
+
+    $this->assertTrue($config['settings']['config_data_from_field_setting']);
+    $this->assertTrue(!isset($config['settings']['field_setting_from_config_data']));
+
+    // Since we are working with raw configuration, this needs to be unset
+    // manually.
+    // @see Drupal\field_test\Plugin\Field\FieldType\TestItem::fieldSettingsFromConfigData()
+    unset($config['settings']['config_data_from_field_setting']);
 
     // Check that default values are set.
     $this->assertEqual($config['required'], FALSE, 'Required defaults to false.');
@@ -134,8 +146,8 @@ class FieldCrudTest extends FieldUnitTestBase {
     // Read the field back.
     $field = FieldConfig::load('entity_test.' . $this->fieldDefinition['bundle'] . '.' . $this->fieldDefinition['field_name']);
     $this->assertTrue($this->fieldDefinition['field_name'] == $field->getName(), 'The field was properly read.');
-    $this->assertTrue($this->fieldDefinition['entity_type'] == $field->entity_type, 'The field was properly read.');
-    $this->assertTrue($this->fieldDefinition['bundle'] == $field->bundle, 'The field was properly read.');
+    $this->assertTrue($this->fieldDefinition['entity_type'] == $field->getTargetEntityTypeId(), 'The field was properly read.');
+    $this->assertTrue($this->fieldDefinition['bundle'] == $field->getTargetBundle(), 'The field was properly read.');
   }
 
   /**
@@ -146,10 +158,10 @@ class FieldCrudTest extends FieldUnitTestBase {
 
     // Check that basic changes are saved.
     $field = FieldConfig::load('entity_test.' . $this->fieldDefinition['bundle'] . '.' . $this->fieldDefinition['field_name']);
-    $field->required = !$field->isRequired();
-    $field->label = $this->randomMachineName();
-    $field->description = $this->randomMachineName();
-    $field->settings['test_field_setting'] = $this->randomMachineName();
+    $field->setRequired(!$field->isRequired());
+    $field->setLabel($this->randomMachineName());
+    $field->set('description', $this->randomMachineName());
+    $field->setSetting('test_field_setting', $this->randomMachineName());
     $field->save();
 
     $field_new = FieldConfig::load('entity_test.' . $this->fieldDefinition['bundle'] . '.' . $this->fieldDefinition['field_name']);
@@ -183,7 +195,7 @@ class FieldCrudTest extends FieldUnitTestBase {
 
     // Make sure the field is marked as deleted when it is specifically loaded.
     $field = current(entity_load_multiple_by_properties('field_config', array('entity_type' => 'entity_test', 'field_name' => $this->fieldDefinition['field_name'], 'bundle' => $this->fieldDefinition['bundle'], 'include_deleted' => TRUE)));
-    $this->assertTrue(!empty($field->deleted), 'A deleted field is marked for deletion.');
+    $this->assertTrue($field->isDeleted(), 'A deleted field is marked for deletion.');
 
     // Try to load the field normally and make sure it does not show up.
     $field = FieldConfig::load('entity_test.' . '.' . $this->fieldDefinition['bundle'] . '.' . $this->fieldDefinition['field_name']);
@@ -207,10 +219,10 @@ class FieldCrudTest extends FieldUnitTestBase {
     entity_create('field_config', $this->fieldDefinition)->save();
     entity_create('field_config', $field_definition_2)->save();
     $field_storage->delete();
-    $this->assertFalse(FieldConfig::loadByName('entity_test', $this->fieldDefinition['bundle'], $field_storage->field_name));
-    $this->assertFalse(FieldConfig::loadByName('entity_test', $field_definition_2['bundle'], $field_storage->field_name));
+    $this->assertFalse(FieldConfig::loadByName('entity_test', $this->fieldDefinition['bundle'], $field_storage->getName()));
+    $this->assertFalse(FieldConfig::loadByName('entity_test', $field_definition_2['bundle'], $field_storage->getName()));
 
-    // Chack that deletion of the last field deletes the storage.
+    // Check that deletion of the last field deletes the storage.
     $field_storage = entity_create('field_storage_config', $this->fieldStorageDefinition);
     $field_storage->save();
     $field = entity_create('field_config', $this->fieldDefinition);
@@ -218,9 +230,9 @@ class FieldCrudTest extends FieldUnitTestBase {
     $field_2 = entity_create('field_config', $field_definition_2);
     $field_2->save();
     $field->delete();
-    $this->assertTrue(FieldStorageConfig::loadByName('entity_test', $field_storage->field_name));
+    $this->assertTrue(FieldStorageConfig::loadByName('entity_test', $field_storage->getName()));
     $field_2->delete();
-    $this->assertFalse(FieldStorageConfig::loadByName('entity_test', $field_storage->field_name));
+    $this->assertFalse(FieldStorageConfig::loadByName('entity_test', $field_storage->getName()));
 
     // Check that deletion of all fields using a storage simultaneously deletes
     // the storage.
@@ -231,7 +243,7 @@ class FieldCrudTest extends FieldUnitTestBase {
     $field_2 = entity_create('field_config', $field_definition_2);
     $field_2->save();
     $this->container->get('entity.manager')->getStorage('field_config')->delete(array($field, $field_2));
-    $this->assertFalse(FieldStorageConfig::loadByName('entity_test', $field_storage->field_name));
+    $this->assertFalse(FieldStorageConfig::loadByName('entity_test', $field_storage->getName()));
   }
 
   /**

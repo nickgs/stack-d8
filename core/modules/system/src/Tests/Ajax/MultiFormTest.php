@@ -47,12 +47,11 @@ class MultiFormTest extends AjaxTestBase {
       ->save();
 
     // Login a user who can create 'page' nodes.
-    $this->web_user = $this->drupalCreateUser(array('create page content'));
-    $this->drupalLogin($this->web_user);
+    $this->drupalLogin ($this->drupalCreateUser(array('create page content')));
   }
 
   /**
-   * Tests that pages with the 'page_node_form' included twice work correctly.
+   * Tests that pages with the 'node_page_form' included twice work correctly.
    */
   function testMultiForm() {
     // HTML IDs for elements within the field are potentially modified with
@@ -60,8 +59,8 @@ class MultiFormTest extends AjaxTestBase {
     // desired elements.
     $field_name = 'field_ajax_test';
     $field_xpaths = array(
-      'page-node-form' => '//form[@id="page-node-form"]//div[contains(@class, "field-name-field-ajax-test")]',
-      'page-node-form--2' => '//form[@id="page-node-form--2"]//div[contains(@class, "field-name-field-ajax-test")]',
+      'node-page-form' => '//form[@id="node-page-form"]//div[contains(@class, "field-name-field-ajax-test")]',
+      'node-page-form--2' => '//form[@id="node-page-form--2"]//div[contains(@class, "field-name-field-ajax-test")]',
     );
     $button_name = $field_name . '_add_more';
     $button_value = t('Add another item');

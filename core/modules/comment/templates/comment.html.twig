@@ -22,7 +22,6 @@
  * - submitted: Submission information created from author and created
  *   during template_preprocess_comment().
  * - user_picture: The comment author's profile picture.
- * - signature: The comment author's signature.
  * - status: Comment status. Possible values are:
  *   unpublished, published, or preview.
  * - title: Comment title, linked to the comment.
@@ -87,7 +86,7 @@
 
   <footer>
     {{ user_picture }}
-    <p class="submitted">{{ submitted }}</p>
+    <p>{{ submitted }}</p>
 
     {#
       Indicate the semantic relationship between parent and child comments
@@ -95,7 +94,7 @@
       reader without this information.
     #}
     {% if parent %}
-      <p class="parent visually-hidden">{{ parent }}</p>
+      <p class="visually-hidden">{{ parent }}</p>
     {% endif %}
 
     {{ permalink }}
@@ -103,12 +102,6 @@
 
   <div{{ content_attributes }}>
     {{ content|without('links') }}
-
-    {% if signature %}
-      <div class="user-signature">
-        {{ signature }}
-      </div>
-    {% endif %}
   </div>
   {% if content.links %}
     {{ content.links }}

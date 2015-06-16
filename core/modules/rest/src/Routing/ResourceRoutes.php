@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Contains \Drupal\rest\EventSubscriber\RouteSubscriber.
+ * Contains \Drupal\rest\Routing\ResourceRoutes.
  */
 
 namespace Drupal\rest\Routing;
@@ -19,7 +19,7 @@ use Symfony\Component\Routing\RouteCollection;
 /**
  * Subscriber for REST-style routes.
  */
-class ResourceRoutes extends RouteSubscriberBase{
+class ResourceRoutes extends RouteSubscriberBase {
 
   /**
    * The plugin manager for REST plugins.

@@ -227,7 +227,7 @@ function theme_system_modules_details($variables) {
 
     $row[] = array('class' => array('checkbox'), 'data' => drupal_render($module['enable']));
 
-    // Add the module label and expand/collapse functionalty.
+    // Add the module label and expand/collapse functionality.
     $id = Html::getUniqueId('module-' . $key);
     $col2 = '<label id="' . $id . '" for="' . $module['enable']['#id'] . '" class="module-name table-filter-text-source">' . drupal_render($module['name']) . '</label>';
     $row[] = array('class' => array('module'), 'data' => SafeMarkup::set($col2));
@@ -235,7 +235,7 @@ function theme_system_modules_details($variables) {
     // Add the description, along with any modules it requires.
     $description = '';
     $description .= '<div class="requirements">';
-    $description .= '<div class="admin-requirements">' . t('Machine name: !key', array('!key' => $key)) . '</div>';
+    $description .= '<div class="admin-requirements">' . t('Machine name: !machine-name', array('!machine-name' => '<span dir="ltr" class="table-filter-text-source">' . $key . '</span>')) . '</div>';
     if ($version || $requires || $required_by) {
       if ($version) {
         $description .= '<div class="admin-requirements">' . t('Version: !module-version', array('!module-version' => drupal_render($module['version']))) . '</div>';

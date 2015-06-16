@@ -90,6 +90,11 @@ class ConfigExportImportUITest extends WebTestBase {
    * Tests a simple site export import case.
    */
   public function testExportImport() {
+    // After installation there is no snapshot and nothing to import.
+    $this->drupalGet('admin/config/development/configuration');
+    $this->assertNoText(t('Warning message'));
+    $this->assertText(t('There are no configuration changes to import.'));
+
     $this->originalSlogan = $this->config('system.site')->get('slogan');
     $this->newSlogan = $this->randomString(16);
     $this->assertNotEqual($this->newSlogan, $this->originalSlogan);
@@ -113,6 +118,8 @@ class ConfigExportImportUITest extends WebTestBase {
       'field_storage' => $this->fieldStorage,
       'bundle' => $this->contentType->id(),
     ))->save();
+    // Update the displays so that configuration does not change unexpectedly on
+    // import.
     entity_get_form_display('node', $this->contentType->id(), 'default')
       ->setComponent($this->fieldName, array(
         'type' => 'text_textfield',
@@ -121,13 +128,19 @@ class ConfigExportImportUITest extends WebTestBase {
     entity_get_display('node', $this->contentType->id(), 'full')
       ->setComponent($this->fieldName)
       ->save();
+    entity_get_display('node', $this->contentType->id(), 'default')
+      ->setComponent($this->fieldName)
+      ->save();
+    entity_get_display('node', $this->contentType->id(), 'teaser')
+      ->removeComponent($this->fieldName)
+      ->save();
 
     $this->drupalGet('node/add/' . $this->contentType->id());
     $this->assertFieldByName("{$this->fieldName}[0][value]", '', 'Widget is displayed');
 
     // Export the configuration.
     $this->drupalPostForm('admin/config/development/configuration/full/export', array(), 'Export');
-    $this->tarball = $this->drupalGetContent();
+    $this->tarball = $this->getRawContent();
 
     $this->config('system.site')
       ->set('slogan', $this->originalSlogan)
@@ -137,13 +150,13 @@ class ConfigExportImportUITest extends WebTestBase {
     // Delete the custom field.
     $fields = FieldConfig::loadMultiple();
     foreach ($fields as $field) {
-      if ($field->field_name == $this->fieldName) {
+      if ($field->getName() == $this->fieldName) {
         $field->delete();
       }
     }
     $field_storages = FieldStorageConfig::loadMultiple();
     foreach ($field_storages as $field_storage) {
-      if ($field_storage->field_name == $this->fieldName) {
+      if ($field_storage->getName() == $this->fieldName) {
         $field_storage->delete();
       }
     }
@@ -154,7 +167,15 @@ class ConfigExportImportUITest extends WebTestBase {
     $filename = 'temporary://' . $this->randomMachineName();
     file_put_contents($filename, $this->tarball);
     $this->drupalPostForm('admin/config/development/configuration/full/import', array('files[import_tarball]' => $filename), 'Upload');
+    // There is no snapshot yet because an import has never run.
+    $this->assertNoText(t('Warning message'));
+    $this->assertNoText(t('There are no configuration changes to import.'));
+    $this->assertText($this->contentType->label());
+
     $this->drupalPostForm(NULL, array(), 'Import all');
+    // After importing the snapshot has been updated an there are no warnings.
+    $this->assertNoText(t('Warning message'));
+    $this->assertText(t('There are no configuration changes to import.'));
 
     $this->assertEqual($this->config('system.site')->get('slogan'), $this->newSlogan);
 
@@ -165,7 +186,26 @@ class ConfigExportImportUITest extends WebTestBase {
       ->set('slogan', $this->originalSlogan)
       ->save();
     $this->drupalGet('admin/config/development/configuration');
-    $this->assertText('Your current configuration has changed. Changes to these configuration items will be lost on the next synchronization: system.site');
+    $this->assertText(t('Warning message'));
+    $this->assertText('The following items in your active configuration have changes since the last import that may be lost on the next import. system.site');
+    // Remove everything from staging. The warning about differences between the
+    // active and snapshot should no longer exist.
+    \Drupal::service('config.storage.staging')->deleteAll();
+    $this->drupalGet('admin/config/development/configuration');
+    $this->assertNoText(t('Warning message'));
+    $this->assertNoText('The following items in your active configuration have changes since the last import that may be lost on the next import. system.site');
+    $this->assertText(t('There are no configuration changes to import.'));
+    // Write a file to staging. The warning about differences between the
+    // active and snapshot should now exist.
+    /** @var \Drupal\Core\Config\StorageInterface $staging */
+    $staging = $this->container->get('config.storage.staging');
+    $data = $this->config('system.site')->get();
+    $data['slogan'] = 'in the face';
+    $this->copyConfig($this->container->get('config.storage'), $staging);
+    $staging->write('system.site', $data);
+    $this->drupalGet('admin/config/development/configuration');
+    $this->assertText(t('Warning message'));
+    $this->assertText('The following items in your active configuration have changes since the last import that may be lost on the next import. system.site');
   }
 
   /**
@@ -184,7 +224,7 @@ class ConfigExportImportUITest extends WebTestBase {
 
     // Export the configuration.
     $this->drupalPostForm('admin/config/development/configuration/full/export', array(), 'Export');
-    $this->tarball = $this->drupalGetContent();
+    $this->tarball = $this->getRawContent();
     $filename = file_directory_temp() .'/' . $this->randomMachineName();
     file_put_contents($filename, $this->tarball);
 
@@ -214,7 +254,7 @@ class ConfigExportImportUITest extends WebTestBase {
     $this->assertEqual($data, array('foo' => 'baz'), 'The config_test.another_update in collection.test2 exists in the snapshot storage.');
     $this->assertFalse($test2_snapshot->read('config_test.another_create'), 'The config_test.another_create in collection.test2 does not exist in the snapshot storage.');
 
-    // Create the tar contains the expected contect for the collections.
+    // Create the tar that contains the expected content for the collections.
     $tar = new ArchiveTar($filename, 'gz');
     $content_list = $tar->listContent();
     // Convert the list of files into something easy to search.

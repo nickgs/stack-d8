@@ -28,7 +28,7 @@ $config['system.performance']['css']['preprocess'] = FALSE;
 $config['system.performance']['js']['preprocess'] = FALSE;
 
 /**
- * Disable the render cache.
+ * Disable the render cache (this includes the page cache).
  *
  * This setting disables the render cache by using the Null cache back-end
  * defined by the development.services.yml file above.
@@ -55,15 +55,3 @@ $settings['extension_discovery_scan_tests'] = TRUE;
  * using these parameters in a request to rebuild.php.
  */
 $settings['rebuild_access'] = TRUE;
-
-/**
- * Trust localhost.
- *
- * This will configure several common hostnames used for local development to
- * be trusted hosts.
- */
-$settings['trusted_host_patterns'] = array(
-  '^localhost$',
-  '^localhost\.*',
-  '\.local$',
-);

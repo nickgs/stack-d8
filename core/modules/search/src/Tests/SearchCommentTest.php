@@ -8,8 +8,9 @@
 namespace Drupal\search\Tests;
 
 use Drupal\comment\Plugin\Field\FieldType\CommentItemInterface;
-use Drupal\Component\Utility\String;
+use Drupal\comment\Tests\CommentTestTrait;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\user\RoleInterface;
 
 /**
  * Tests integration searching comments.
@@ -17,6 +18,8 @@ use Drupal\field\Entity\FieldConfig;
  * @group search
  */
 class SearchCommentTest extends SearchTestBase {
+
+  use CommentTestTrait;
 
   /**
    * Modules to enable.
@@ -78,7 +81,7 @@ class SearchCommentTest extends SearchTestBase {
     $this->adminUser = $this->drupalCreateUser($permissions);
     $this->drupalLogin($this->adminUser);
     // Add a comment field.
-    $this->container->get('comment.manager')->addDefaultField('node', 'article');
+    $this->addDefaultCommentField('node', 'article');
   }
 
   /**
@@ -94,7 +97,7 @@ class SearchCommentTest extends SearchTestBase {
       'filters' => array(
         'filter_html_escape' => array('status' => 1),
       ),
-      'roles' => array(DRUPAL_AUTHENTICATED_RID),
+      'roles' => array(RoleInterface::AUTHENTICATED_ID),
     ));
     $basic_html_format->save();
 
@@ -102,14 +105,14 @@ class SearchCommentTest extends SearchTestBase {
 
     // Make preview optional.
     $field = FieldConfig::loadByName('node', 'article', 'comment');
-    $field->settings['preview'] = DRUPAL_OPTIONAL;
+    $field->setSetting('preview', DRUPAL_OPTIONAL);
     $field->save();
 
     // Allow anonymous users to search content.
     $edit = array(
-      DRUPAL_ANONYMOUS_RID . '[search content]' => 1,
-      DRUPAL_ANONYMOUS_RID . '[access comments]' => 1,
-      DRUPAL_ANONYMOUS_RID . '[post comments]' => 1,
+      RoleInterface::ANONYMOUS_ID . '[search content]' => 1,
+      RoleInterface::ANONYMOUS_ID . '[access comments]' => 1,
+      RoleInterface::ANONYMOUS_ID . '[post comments]' => 1,
     );
     $this->drupalPostForm('admin/people/permissions', $edit, t('Save permissions'));
 
@@ -175,7 +178,7 @@ class SearchCommentTest extends SearchTestBase {
     // Create a node.
     // Make preview optional.
     $field = FieldConfig::loadByName('node', 'article', 'comment');
-    $field->settings['preview'] = DRUPAL_OPTIONAL;
+    $field->setSetting('preview', DRUPAL_OPTIONAL);
     $field->save();
     $this->node = $this->drupalCreateNode(array('type' => 'article'));
 
@@ -186,17 +189,17 @@ class SearchCommentTest extends SearchTestBase {
     $this->drupalPostForm('comment/reply/node/' . $this->node->id() . '/comment', $edit_comment, t('Save'));
 
     $this->drupalLogout();
-    $this->setRolePermissions(DRUPAL_ANONYMOUS_RID);
+    $this->setRolePermissions(RoleInterface::ANONYMOUS_ID);
     $this->assertCommentAccess(FALSE, 'Anon user has search permission but no access comments permission, comments should not be indexed');
 
-    $this->setRolePermissions(DRUPAL_ANONYMOUS_RID, TRUE);
+    $this->setRolePermissions(RoleInterface::ANONYMOUS_ID, TRUE);
     $this->assertCommentAccess(TRUE, 'Anon user has search permission and access comments permission, comments should be indexed');
 
     $this->drupalLogin($this->adminUser);
     $this->drupalGet('admin/people/permissions');
 
     // Disable search access for authenticated user to test admin user.
-    $this->setRolePermissions(DRUPAL_AUTHENTICATED_RID, FALSE, FALSE);
+    $this->setRolePermissions(RoleInterface::AUTHENTICATED_ID, FALSE, FALSE);
 
     $this->setRolePermissions($this->adminRole);
     $this->assertCommentAccess(FALSE, 'Admin user has search permission but no access comments permission, comments should not be indexed');
@@ -205,21 +208,21 @@ class SearchCommentTest extends SearchTestBase {
     $this->setRolePermissions($this->adminRole, TRUE);
     $this->assertCommentAccess(TRUE, 'Admin user has search permission and access comments permission, comments should be indexed');
 
-    $this->setRolePermissions(DRUPAL_AUTHENTICATED_RID);
+    $this->setRolePermissions(RoleInterface::AUTHENTICATED_ID);
     $this->assertCommentAccess(FALSE, 'Authenticated user has search permission but no access comments permission, comments should not be indexed');
 
-    $this->setRolePermissions(DRUPAL_AUTHENTICATED_RID, TRUE);
+    $this->setRolePermissions(RoleInterface::AUTHENTICATED_ID, TRUE);
     $this->assertCommentAccess(TRUE, 'Authenticated user has search permission and access comments permission, comments should be indexed');
 
     // Verify that access comments permission is inherited from the
     // authenticated role.
-    $this->setRolePermissions(DRUPAL_AUTHENTICATED_RID, TRUE, FALSE);
+    $this->setRolePermissions(RoleInterface::AUTHENTICATED_ID, TRUE, FALSE);
     $this->setRolePermissions($this->adminRole);
     $this->assertCommentAccess(TRUE, 'Admin user has search permission and no access comments permission, but comments should be indexed because admin user inherits authenticated user\'s permission to access comments');
 
     // Verify that search content permission is inherited from the authenticated
     // role.
-    $this->setRolePermissions(DRUPAL_AUTHENTICATED_RID, TRUE, TRUE);
+    $this->setRolePermissions(RoleInterface::AUTHENTICATED_ID, TRUE, TRUE);
     $this->setRolePermissions($this->adminRole, TRUE, FALSE);
     $this->assertCommentAccess(TRUE, 'Admin user has access comments permission and no search permission, but comments should be indexed because admin user inherits authenticated user\'s permission to search');
   }

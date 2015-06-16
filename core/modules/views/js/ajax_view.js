@@ -28,7 +28,7 @@
    * Javascript object for a certain view.
    */
   Drupal.views.ajaxView = function (settings) {
-    var selector = '.view-dom-id-' + settings.view_dom_id;
+    var selector = '.js-view-dom-id-' + settings.view_dom_id;
     this.$view = $(selector);
 
     // Retrieve the path to use for views' ajax.
@@ -63,14 +63,14 @@
 
     // Add the ajax to exposed forms.
     this.$exposed_form = $('form#views-exposed-form-' + settings.view_name.replace(/_/g, '-') + '-' + settings.view_display_id.replace(/_/g, '-'));
-    this.$exposed_form.once('exposed-form', jQuery.proxy(this.attachExposedFormAjax, this));
+    this.$exposed_form.once('exposed-form').each(jQuery.proxy(this.attachExposedFormAjax, this));
 
     // Add the ajax to pagers.
     this.$view
       // Don't attach to nested views. Doing so would attach multiple behaviors
       // to a given element.
       .filter(jQuery.proxy(this.filterNestedViews, this))
-      .once('ajax-pager', jQuery.proxy(this.attachPagerAjax, this));
+      .once('ajax-pager').each(jQuery.proxy(this.attachPagerAjax, this));
 
     // Add a trigger to update this view specifically. In order to trigger a
     // refresh use the following code.
@@ -78,16 +78,23 @@
     // @code
     // jQuery('.view-name').trigger('RefreshView');
     // @endcode
-    var self_settings = this.element_settings;
-    self_settings.event = 'RefreshView';
-    this.refreshViewAjax = new Drupal.ajax(this.selector, this.$view, self_settings);
+    var self_settings = $.extend({}, this.element_settings, {
+      event: 'RefreshView',
+      base: this.selector,
+      element: this.$view
+    });
+    this.refreshViewAjax = Drupal.ajax(self_settings);
   };
 
   Drupal.views.ajaxView.prototype.attachExposedFormAjax = function () {
     var button = $('input[type=submit], input[type=image]', this.$exposed_form);
     button = button[0];
 
-    this.exposedFormAjax = new Drupal.ajax($(button).attr('id'), button, this.element_settings);
+    var self_settings = $.extend({}, this.element_settings, {
+      base: $(button).attr('id'),
+      element: button
+    });
+    this.exposedFormAjax = Drupal.ajax(self_settings);
   };
 
   Drupal.views.ajaxView.prototype.filterNestedViews = function () {
@@ -100,7 +107,7 @@
    * Attach the ajax behavior to each link.
    */
   Drupal.views.ajaxView.prototype.attachPagerAjax = function () {
-    this.$view.find('ul.pager__items > li > a, th.views-field a, .attachment .views-summary a')
+    this.$view.find('ul.js-pager__items > li > a, th.views-field a, .attachment .views-summary a')
       .each(jQuery.proxy(this.attachPagerLinkAjax, this));
   };
 
@@ -121,12 +128,12 @@
       Drupal.Views.parseViewArgs(href, this.settings.view_base_path)
     );
 
-    // For anchor tags, these will go to the target of the anchor rather
-    // than the usual location.
-    $.extend(viewData, Drupal.Views.parseViewArgs(href, this.settings.view_base_path));
-
-    this.element_settings.submit = viewData;
-    this.pagerAjax = new Drupal.ajax(false, $link, this.element_settings);
+    var self_settings = $.extend({}, this.element_settings, {
+      submit: viewData,
+      base: false,
+      element: $link
+    });
+    this.pagerAjax = Drupal.ajax(self_settings);
   };
 
   Drupal.AjaxCommands.prototype.viewsScrollTop = function (ajax, response) {

@@ -9,6 +9,8 @@ namespace Drupal\node\Tests;
 
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
+use Drupal\node\Entity\NodeType;
+use Drupal\user\Entity\User;
 
 /**
  * Tests node access functionality with multiple languages and two node access
@@ -49,7 +51,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
   protected function setUp() {
     parent::setUp();
 
-    node_access_test_add_field(entity_load('node_type', 'page'));
+    node_access_test_add_field(NodeType::load('page'));
 
     // Create the 'private' field, which allows the node to be marked as private
     // (restricted access) in a given translation.
@@ -58,10 +60,6 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'entity_type' => 'node',
       'type' => 'boolean',
       'cardinality' => 1,
-      'settings' => array(
-        'on_label' => 'Private',
-        'off_label' => 'Not private',
-      ),
     ));
     $field_storage->save();
 
@@ -70,6 +68,10 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'bundle' => 'page',
       'widget' => array(
         'type' => 'options_buttons',
+      ),
+      'settings' => array(
+        'on_label' => 'Private',
+        'off_label' => 'Not private',
       ),
     ))->save();
 
@@ -85,7 +87,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
 
     // Load the user 1 user for later use as an admin user with permission to
     // see everything.
-    $this->adminUser = user_load(1);
+    $this->adminUser = User::load(1);
 
     // The node_access_test_language module allows individual translations of a
     // node to be marked private (not viewable by normal users), and the
@@ -109,7 +111,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => FALSE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 0;
+    $translation->field_private->value = 0;
     $node->save();
 
     $this->nodes['private_both_public'] = $node = $this->drupalCreateNode(array(
@@ -119,7 +121,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => TRUE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 0;
+    $translation->field_private->value = 0;
     $node->save();
 
     $this->nodes['public_hu_private'] = $node = $this->drupalCreateNode(array(
@@ -129,7 +131,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => FALSE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 0;
+    $translation->field_private->value = 0;
     $node->save();
 
     $this->nodes['public_ca_private'] = $node = $this->drupalCreateNode(array(
@@ -139,7 +141,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => FALSE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 1;
+    $translation->field_private->value = 1;
     $node->save();
 
     $this->nodes['public_both_private'] = $node = $this->drupalCreateNode(array(
@@ -149,7 +151,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => FALSE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 1;
+    $translation->field_private->value = 1;
     $node->save();
 
     $this->nodes['private_both_private'] = $node = $this->drupalCreateNode(array(
@@ -159,7 +161,7 @@ class NodeAccessLanguageAwareCombinationTest extends NodeTestBase {
       'private' => TRUE,
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 1;
+    $translation->field_private->value = 1;
     $node->save();
 
     $this->nodes['public_no_language_private'] = $this->drupalCreateNode(array(

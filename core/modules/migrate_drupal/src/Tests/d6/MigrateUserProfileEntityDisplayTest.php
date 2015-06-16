@@ -8,7 +8,7 @@
 namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 use Drupal\Core\Database\Database;
 
 /**
@@ -16,14 +16,14 @@ use Drupal\Core\Database\Database;
  *
  * @group migrate_drupal
  */
-class MigrateUserProfileEntityDisplayTest extends MigrateDrupalTestBase {
+class MigrateUserProfileEntityDisplayTest extends MigrateDrupal6TestBase {
 
   /**
    * Modules to enable.
    *
    * @var array
    */
-  static $modules = array('link', 'options', 'datetime');
+  static $modules = array('link', 'options', 'datetime', 'text');
 
   /**
    * {@inheritdoc}
@@ -110,15 +110,15 @@ class MigrateUserProfileEntityDisplayTest extends MigrateDrupalTestBase {
 
     // Test a text field.
     $component = $display->getComponent('profile_color');
-    $this->assertEqual($component['type'], 'text_default');
+    $this->assertIdentical('text_default', $component['type']);
 
     // Test a list field.
     $component = $display->getComponent('profile_bands');
-    $this->assertEqual($component['type'], 'text_default');
+    $this->assertIdentical('text_default', $component['type']);
 
     // Test a date field.
     $component = $display->getComponent('profile_birthdate');
-    $this->assertEqual($component['type'], 'datetime_default');
+    $this->assertIdentical('datetime_default', $component['type']);
 
     // Test PROFILE_PRIVATE field is hidden.
     $this->assertNull($display->getComponent('profile_sell_address'));

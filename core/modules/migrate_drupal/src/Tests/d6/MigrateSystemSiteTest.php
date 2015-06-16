@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateMessage;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade site variables to system.*.yml.
  *
  * @group migrate_drupal
  */
-class MigrateSystemSiteTest extends MigrateDrupalTestBase {
+class MigrateSystemSiteTest extends MigrateDrupal6TestBase {
 
   /**
    * {@inheritdoc}
@@ -37,13 +37,13 @@ class MigrateSystemSiteTest extends MigrateDrupalTestBase {
    */
   public function testSystemSite() {
     $config = $this->config('system.site');
-    $this->assertIdentical($config->get('name'), 'site_name');
-    $this->assertIdentical($config->get('mail'), 'site_mail@example.com');
-    $this->assertIdentical($config->get('slogan'), 'Migrate rocks');
-    $this->assertIdentical($config->get('page.403'), 'user');
-    $this->assertIdentical($config->get('page.404'), 'page-not-found');
-    $this->assertIdentical($config->get('page.front'), 'node');
-    $this->assertIdentical($config->get('admin_compact_mode'), FALSE);
+    $this->assertIdentical('site_name', $config->get('name'));
+    $this->assertIdentical('site_mail@example.com', $config->get('mail'));
+    $this->assertIdentical('Migrate rocks', $config->get('slogan'));
+    $this->assertIdentical('user', $config->get('page.403'));
+    $this->assertIdentical('page-not-found', $config->get('page.404'));
+    $this->assertIdentical('node', $config->get('page.front'));
+    $this->assertIdentical(FALSE, $config->get('admin_compact_mode'));
   }
 
 }

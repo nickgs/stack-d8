@@ -59,21 +59,22 @@ class MenuLinkContentAccessControlHandler extends EntityAccessControlHandler imp
 
       case 'update':
         if (!$account->hasPermission('administer menu')) {
-          return AccessResult::neutral()->cachePerRole();
+          return AccessResult::neutral()->cachePerPermissions();
         }
         else {
           // If there is a URL, this is an external link so always accessible.
-          $access = AccessResult::allowed()->cachePerRole()->cacheUntilEntityChanges($entity);
-          if (!$entity->getUrl()) {
-            // We allow access, but only if the link is accessible as well.
-            $link_access = $this->accessManager->checkNamedRoute($entity->getRouteName(), $entity->getRouteParameters(), $account, TRUE);
-            return $access->andIf($link_access);
+          $access = AccessResult::allowed()->cachePerPermissions()->cacheUntilEntityChanges($entity);
+          /** @var \Drupal\menu_link_content\MenuLinkContentInterface $entity */
+          // We allow access, but only if the link is accessible as well.
+          if (($url_object = $entity->getUrlObject()) && $url_object->isRouted()) {
+            $link_access = $this->accessManager->checkNamedRoute($url_object->getRouteName(), $url_object->getRouteParameters(), $account, TRUE);
+            $access = $access->andIf($link_access);
           }
           return $access;
         }
 
       case 'delete':
-        return AccessResult::allowedIf(!$entity->isNew() && $account->hasPermission('administer menu'))->cachePerRole()->cacheUntilEntityChanges($entity);
+        return AccessResult::allowedIf(!$entity->isNew() && $account->hasPermission('administer menu'))->cachePerPermissions()->cacheUntilEntityChanges($entity);
     }
   }
 

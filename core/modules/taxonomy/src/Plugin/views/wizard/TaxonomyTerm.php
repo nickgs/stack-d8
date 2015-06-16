@@ -14,7 +14,7 @@ use Drupal\views\Plugin\views\wizard\WizardPluginBase;
  *
  * @ViewsWizard(
  *   id = "taxonomy_term",
- *   base_table = "taxonomy_term_data",
+ *   base_table = "taxonomy_term_field_data",
  *   title = @Translation("Taxonomy terms")
  * )
  */
@@ -28,6 +28,7 @@ class TaxonomyTerm extends WizardPluginBase {
 
     // Add permission-based access control.
     $display_options['access']['type'] = 'perm';
+    $display_options['access']['options']['perm'] = 'access content';
 
     // Remove the default fields, since we are customizing them here.
     unset($display_options['fields']);
@@ -49,8 +50,9 @@ class TaxonomyTerm extends WizardPluginBase {
     $display_options['fields']['name']['alter']['html'] = 0;
     $display_options['fields']['name']['hide_empty'] = 0;
     $display_options['fields']['name']['empty_zero'] = 0;
-    $display_options['fields']['name']['link_to_taxonomy'] = 1;
-    $display_options['fields']['name']['plugin_id'] = 'taxonomy';
+    $display_options['fields']['name']['type'] = 'string';
+    $display_options['fields']['name']['settings']['link_to_entity'] = 1;
+    $display_options['fields']['name']['plugin_id'] = 'term_name';
 
     return $display_options;
   }

@@ -124,7 +124,7 @@ abstract class WizardPluginBase extends PluginBase implements WizardInterface {
 
     $entity_types = \Drupal::entityManager()->getDefinitions();
     foreach ($entity_types as $entity_type_id => $entity_type) {
-      if ($this->base_table == $entity_type->getBaseTable()) {
+      if ($this->base_table == $entity_type->getBaseTable() || $this->base_table == $entity_type->getDataTable()) {
         $this->entityType = $entity_type;
         $this->entityTypeId = $entity_type_id;
       }
@@ -828,8 +828,8 @@ abstract class WizardPluginBase extends PluginBase implements WizardInterface {
         }
       }
     }
-    // @todo refactor the code to use ViewExecutable::addHandler, see
-    //   https://drupal.org/node/2383157
+    // @todo Refactor the code to use ViewExecutable::addHandler. See
+    //   https://www.drupal.org/node/2383157.
     $display_options['fields'][$default_field] = array(
       'table' => $default_table,
       'field' => $default_field,
@@ -978,7 +978,7 @@ abstract class WizardPluginBase extends PluginBase implements WizardInterface {
     // 'none'.
     if (($sort_type = $form_state->getValue(array('show', 'sort'))) && $sort_type != 'none') {
       list($column, $sort) = explode(':', $sort_type);
-      // Column either be a column-name or the table-columnn-ame.
+      // Column either be a column-name or the table-column-name.
       $column = explode('-', $column);
       if (count($column) > 1) {
         $table = $column[0];

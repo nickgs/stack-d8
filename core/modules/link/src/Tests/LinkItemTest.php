@@ -28,7 +28,6 @@ class LinkItemTest extends FieldUnitTestBase {
 
   protected function setUp() {
     parent::setUp();
-    $this->installSchema('system', ['router']);
 
     // Create a link field for validation.
     entity_create('field_storage_config', array(
@@ -49,7 +48,7 @@ class LinkItemTest extends FieldUnitTestBase {
   public function testLinkItem() {
     // Create entity.
     $entity = entity_create('entity_test');
-    $url = 'http://www.drupal.org?test_param=test_value';
+    $url = 'https://www.drupal.org?test_param=test_value';
     $parsed_url = UrlHelper::parse($url);
     $title = $this->randomMachineName();
     $class = $this->randomMachineName();
@@ -83,7 +82,7 @@ class LinkItemTest extends FieldUnitTestBase {
     $this->assertEqual($entity->field_test->options['query'], $parsed_url['query']);
 
     // Verify changing the field value.
-    $new_url = 'http://drupal.org';
+    $new_url = 'https://www.drupal.org';
     $new_title = $this->randomMachineName();
     $new_class = $this->randomMachineName();
     $entity->field_test->uri = $new_url;

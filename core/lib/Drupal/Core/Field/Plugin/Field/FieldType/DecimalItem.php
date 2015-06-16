@@ -19,6 +19,7 @@ use Drupal\Core\TypedData\DataDefinition;
  *   id = "decimal",
  *   label = @Translation("Number (decimal)"),
  *   description = @Translation("This field stores a number in the database in a fixed decimal format."),
+ *   category = @Translation("Number"),
  *   default_widget = "number",
  *   default_formatter = "number_decimal"
  * )
@@ -87,6 +88,19 @@ class DecimalItem extends NumericItemBase {
       '#description' => t('The number of digits to the right of the decimal.'),
       '#disabled' => $has_data,
     );
+
+    return $element;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
+    $element = parent::fieldSettingsForm($form, $form_state);
+    $settings = $this->getSettings();
+
+    $element['min']['#step'] = pow(0.1, $settings['scale']);
+    $element['max']['#step'] = pow(0.1, $settings['scale']);
 
     return $element;
   }

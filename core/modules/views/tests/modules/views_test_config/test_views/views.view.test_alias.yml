@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -8,7 +8,7 @@ label: test_alias
 module: views
 description: ''
 tag: default
-base_table: users
+base_table: users_field_data
 base_field: nid
 core: 8.0-dev
 display:
@@ -38,10 +38,9 @@ display:
           hide_empty: false
           id: name
           label: ''
-          link_to_user: true
-          overwrite_anonymous: false
           table: users_field_data
-          plugin_id: user_name
+          plugin_id: field
+          type: user_name
           entity_type: user
           entity_field: name
       filters:
@@ -78,7 +77,7 @@ display:
           is_grouped: false
           operator: '>'
           relationship: none
-          table: users
+          table: users_field_data
           value:
             max: ''
             min: ''
@@ -91,8 +90,6 @@ display:
         type: views_query
       row:
         type: fields
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default

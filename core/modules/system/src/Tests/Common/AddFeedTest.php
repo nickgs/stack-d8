@@ -7,6 +7,7 @@
 
 namespace Drupal\system\Tests\Common;
 
+use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -22,15 +23,15 @@ class AddFeedTest extends WebTestBase {
   function testBasicFeedAddNoTitle() {
     $path = $this->randomMachineName(12);
     $external_url = 'http://' . $this->randomMachineName(12) . '/' . $this->randomMachineName(12);
-    $fully_qualified_local_url = _url($this->randomMachineName(12), array('absolute' => TRUE));
+    $fully_qualified_local_url = Url::fromUri('base:' . $this->randomMachineName(12), array('absolute' => TRUE))->toString();
 
     $path_for_title = $this->randomMachineName(12);
     $external_for_title = 'http://' . $this->randomMachineName(12) . '/' . $this->randomMachineName(12);
-    $fully_qualified_for_title = _url($this->randomMachineName(12), array('absolute' => TRUE));
+    $fully_qualified_for_title = Url::fromUri('base:' . $this->randomMachineName(12), array('absolute' => TRUE))->toString();
 
     $urls = array(
       'path without title' => array(
-        'url' => _url($path, array('absolute' => TRUE)),
+        'url' => Url::fromUri('base:' . $path, array('absolute' => TRUE))->toString(),
         'title' => '',
       ),
       'external URL without title' => array(
@@ -42,7 +43,7 @@ class AddFeedTest extends WebTestBase {
         'title' => '',
       ),
       'path with title' => array(
-        'url' => _url($path_for_title, array('absolute' => TRUE)),
+        'url' => Url::fromUri('base:' . $path_for_title, array('absolute' => TRUE))->toString(),
         'title' => $this->randomMachineName(12),
       ),
       'external URL with title' => array(
@@ -62,7 +63,7 @@ class AddFeedTest extends WebTestBase {
 
     drupal_process_attached($build);
 
-    $this->drupalSetContent(drupal_get_html_head());
+    $this->setRawContent(drupal_get_html_head());
     foreach ($urls as $description => $feed_info) {
       $this->assertPattern($this->urlToRSSLinkPattern($feed_info['url'], $feed_info['title']), format_string('Found correct feed header for %description', array('%description' => $description)));
     }
@@ -81,7 +82,7 @@ class AddFeedTest extends WebTestBase {
   /**
    * Checks that special characters are correctly escaped.
    *
-   * @see http://drupal.org/node/1211668
+   * @see https://www.drupal.org/node/1211668
    */
   function testFeedIconEscaping() {
     $variables = array(

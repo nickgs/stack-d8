@@ -39,12 +39,20 @@ function twig_theme_test_theme($existing, $type, $theme, $path) {
     'template' => 'twig_theme_test.url_generator',
   );
   $items['twig_theme_test_link_generator'] = array(
-    'variables' => array('test_url' => NULL),
+    'variables' => array('test_url' => NULL, 'test_url_attribute' => NULL),
     'template' => 'twig_theme_test.link_generator',
+  );
+  $items['twig_theme_test_url_to_string'] = array(
+    'variables' => array('test_url' => NULL),
+    'template' => 'twig_theme_test.url_to_string',
   );
   $items['twig_theme_test_file_url'] = array(
     'variables' => array(),
     'template' => 'twig_theme_test.file_url',
+  );
+  $items['twig_theme_test_attach_library'] = array(
+    'variables' => array(),
+    'template' => 'twig_theme_test.attach_library',
   );
   return $items;
 }

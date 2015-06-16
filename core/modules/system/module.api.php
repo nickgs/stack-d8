@@ -1,7 +1,8 @@
 <?php
+
 /**
  * @file
- * Hooks provided by Drupal core and the System module.
+ * Hooks related to module and update systems.
  */
 
 use Drupal\Core\Utility\UpdateException;
@@ -70,8 +71,8 @@ function hook_hook_info() {
  *   The name of the module hook being implemented.
  */
 function hook_module_implements_alter(&$implementations, $hook) {
-  if ($hook == 'rdf_mapping') {
-    // Move my_module_rdf_mapping() to the end of the list.
+  if ($hook == 'form_alter') {
+    // Move my_module_form_alter() to the end of the list.
     // \Drupal::moduleHandler()->getImplementations()
     // iterates through $implementations with a foreach loop which PHP iterates
     // in the order that the items were added, so to move an item to the end of
@@ -149,8 +150,8 @@ function hook_modules_installed($modules) {
  * this, any time a hook_update_N() is added to the module, this function needs
  * to be updated to reflect the current version of the database schema.
  *
- * See the @link http://drupal.org/node/146843 Schema API documentation @endlink
- * for details on hook_schema and how database tables are defined.
+ * See the @link https://www.drupal.org/node/146843 Schema API documentation
+ * @endlink for details on hook_schema and how database tables are defined.
  *
  * Note that since this function is called from a full bootstrap, all functions
  * (including those in modules enabled by the current page request) are
@@ -233,8 +234,9 @@ function hook_uninstall() {
  *
  * Any tasks you define here will be run, in order, after the installer has
  * finished the site configuration step but before it has moved on to the
- * final import of languages and the end of the installation. You can have any
- * number of custom tasks to perform during this phase.
+ * final import of languages and the end of the installation. This is invoked
+ * by install_tasks(). You can have any number of custom tasks to perform
+ * during this phase.
  *
  * Each task you define here corresponds to a callback function which you must
  * separately define and which is called when your task is run. This function
@@ -327,6 +329,8 @@ function hook_uninstall() {
  *
  * @see install_state_defaults()
  * @see batch_set()
+ * @see hook_install_tasks_alter()
+ * @see install_tasks()
  */
 function hook_install_tasks(&$install_state) {
   // Here, we define a variable to allow tasks to indicate that a particular,
@@ -396,12 +400,17 @@ function hook_install_tasks(&$install_state) {
  * You can use this hook to change or replace any part of the Drupal
  * installation process that occurs after the installation profile is selected.
  *
+ * This hook is invoked on the install profile in install_tasks().
+ *
  * @param $tasks
  *   An array of all available installation tasks, including those provided by
  *   Drupal core. You can modify this array to change or replace individual
  *   steps within the installation process.
  * @param $install_state
  *   An array of information about the current installation state.
+ *
+ * @see hook_install_tasks()
+ * @see install_tasks()
  */
 function hook_install_tasks_alter(&$tasks, $install_state) {
   // Replace the entire site configuration form provided by Drupal core
@@ -417,7 +426,7 @@ function hook_install_tasks_alter(&$tasks, $install_state) {
  * update.php. The documentation block preceding this function is stripped of
  * newlines and used as the description for the update on the pending updates
  * task list. Schema updates should adhere to the
- * @link http://drupal.org/node/150215 Schema API. @endlink
+ * @link https://www.drupal.org/node/150215 Schema API. @endlink
  *
  * Implementations of hook_update_N() are named (module name)_update_(number).
  * The numbers are composed of three parts:
@@ -438,11 +447,12 @@ function hook_install_tasks_alter(&$tasks, $install_state) {
  * 8.x. Therefore, only update hooks numbered 8001 or later will run for
  * Drupal 8. 8000 is reserved for the minimum core schema version and defining
  * mymodule_update_8000() will result in an exception. Use the
- * @link https://drupal.org/node/2127611 Migration API @endlink instead to
+ * @link https://www.drupal.org/node/2127611 Migration API @endlink instead to
  * migrate data from an earlier major version of Drupal.
  *
  * For further information about releases and release numbers see:
- * @link http://drupal.org/node/711070 Maintaining a drupal.org project with Git @endlink
+ * @link https://www.drupal.org/node/711070 Maintaining a drupal.org project
+ * with Git @endlink
  *
  * Never renumber update functions.
  *
@@ -755,7 +765,7 @@ function hook_requirements($phase) {
     }
     else {
       $requirements['cron'] = array(
-        'description' => t('Cron has not run. It appears cron jobs have not been setup on your system. Check the help pages for <a href="@url">configuring cron jobs</a>.', array('@url' => 'http://drupal.org/cron')),
+        'description' => t('Cron has not run. It appears cron jobs have not been setup on your system. Check the help pages for <a href="@url">configuring cron jobs</a>.', array('@url' => 'https://www.drupal.org/cron')),
         'severity' => REQUIREMENT_ERROR,
         'value' => t('Never run'),
       );

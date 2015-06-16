@@ -8,7 +8,7 @@
 namespace Drupal\field_ui;
 
 use Drupal\Component\Utility\Html;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Config\Entity\ConfigEntityListBuilder;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityManagerInterface;
@@ -83,8 +83,8 @@ class FieldConfigListBuilder extends ConfigEntityListBuilder {
     $this->targetBundle = $target_bundle;
 
     $build = parent::render();
-    $build['#attributes']['id'] = 'field-overview';
-    $build['#empty'] = $this->t('No fields are present yet.');
+    $build['table']['#attributes']['id'] = 'field-overview';
+    $build['table']['#empty'] = $this->t('No fields are present yet.');
 
     return $build;
   }
@@ -133,7 +133,7 @@ class FieldConfigListBuilder extends ConfigEntityListBuilder {
     $row = array(
       'id' => Html::getClass($field_config->getName()),
       'data' => array(
-        'label' => String::checkPlain($field_config->getLabel()),
+        'label' => SafeMarkup::checkPlain($field_config->getLabel()),
         'field_name' => $field_config->getName(),
         'field_type' => array(
           'data' => array(
@@ -149,7 +149,7 @@ class FieldConfigListBuilder extends ConfigEntityListBuilder {
     // Add the operations.
     $row['data'] = $row['data'] + parent::buildRow($field_config);
 
-    if (!empty($field_storage->locked)) {
+    if ($field_storage->isLocked()) {
       $row['data']['operations'] = array('data' => array('#markup' => $this->t('Locked')));
       $row['class'][] = 'menu-disabled';
     }
@@ -164,24 +164,26 @@ class FieldConfigListBuilder extends ConfigEntityListBuilder {
     /** @var \Drupal\field\FieldConfigInterface $entity */
     $operations = parent::getDefaultOperations($entity);
 
-    if ($entity->access('update') && $entity->hasLinkTemplate("{$entity->entity_type}-field-edit-form")) {
+    if ($entity->access('update') && $entity->hasLinkTemplate("{$entity->getTargetEntityTypeId()}-field-edit-form")) {
       $operations['edit'] = array(
         'title' => $this->t('Edit'),
         'weight' => 10,
-      ) + $entity->urlInfo("{$entity->entity_type}-field-edit-form")->toArray();
+        'url' => $entity->urlInfo("{$entity->getTargetEntityTypeId()}-field-edit-form"),
+      );
     }
-    if ($entity->access('delete') && $entity->hasLinkTemplate("{$entity->entity_type}-field-delete-form")) {
+    if ($entity->access('delete') && $entity->hasLinkTemplate("{$entity->getTargetEntityTypeId()}-field-delete-form")) {
       $operations['delete'] = array(
-      'title' => $this->t('Delete'),
-      'weight' => 100,
-      ) + $entity->urlInfo("{$entity->entity_type}-field-delete-form")->toArray();
+        'title' => $this->t('Delete'),
+        'weight' => 100,
+        'url' => $entity->urlInfo("{$entity->getTargetEntityTypeId()}-field-delete-form"),
+      );
     }
 
     $operations['storage-settings'] = array(
       'title' => $this->t('Storage settings'),
       'weight' => 20,
       'attributes' => array('title' => $this->t('Edit storage settings.')),
-      'url' => $entity->urlInfo("{$entity->entity_type}-storage-edit-form"),
+      'url' => $entity->urlInfo("{$entity->getTargetEntityTypeId()}-storage-edit-form"),
     );
     $operations['edit']['attributes']['title'] = $this->t('Edit field settings.');
     $operations['delete']['attributes']['title'] = $this->t('Delete field.');

@@ -8,7 +8,7 @@
 namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 use Drupal\taxonomy\Entity\Vocabulary;
 
 /**
@@ -16,7 +16,7 @@ use Drupal\taxonomy\Entity\Vocabulary;
  *
  * @group migrate_drupal
  */
-class MigrateTaxonomyVocabularyTest extends MigrateDrupalTestBase {
+class MigrateTaxonomyVocabularyTest extends MigrateDrupal6TestBase {
 
   /**
    * Modules to enable.
@@ -47,17 +47,17 @@ class MigrateTaxonomyVocabularyTest extends MigrateDrupalTestBase {
     for ($i = 0; $i < 3; $i++) {
       $j = $i + 1;
       $vocabulary = Vocabulary::load("vocabulary_{$j}_i_{$i}_");
-      $this->assertEqual(array($vocabulary->id()), entity_load('migration', 'd6_taxonomy_vocabulary')->getIdMap()->lookupDestinationID(array($j)));
-      $this->assertEqual($vocabulary->label(), "vocabulary $j (i=$i)");
-      $this->assertEqual($vocabulary->getDescription(), "description of vocabulary $j (i=$i)");
-      $this->assertEqual($vocabulary->getHierarchy(), $i);
-      $this->assertEqual($vocabulary->get('weight'), 4 + $i);
+      $this->assertIdentical(entity_load('migration', 'd6_taxonomy_vocabulary')->getIdMap()->lookupDestinationID(array($j)), array($vocabulary->id()));
+      $this->assertIdentical("vocabulary $j (i=$i)", $vocabulary->label());
+      $this->assertIdentical("description of vocabulary $j (i=$i)", $vocabulary->getDescription());
+      $this->assertIdentical($i, $vocabulary->getHierarchy());
+      $this->assertIdentical(4 + $i, $vocabulary->get('weight'));
     }
     $vocabulary = Vocabulary::load('vocabulary_name_much_longer_than');
-    $this->assertEqual($vocabulary->label(), 'vocabulary name much longer than thirty two characters');
-    $this->assertEqual($vocabulary->getDescription(), 'description of vocabulary name much longer than thirty two characters');
-    $this->assertEqual($vocabulary->getHierarchy(), 3);
-    $this->assertEqual($vocabulary->get('weight'), 7);
+    $this->assertIdentical('vocabulary name much longer than thirty two characters', $vocabulary->label());
+    $this->assertIdentical('description of vocabulary name much longer than thirty two characters', $vocabulary->getDescription());
+    $this->assertIdentical(3, $vocabulary->getHierarchy());
+    $this->assertIdentical(7, $vocabulary->get('weight'));
   }
 
 }

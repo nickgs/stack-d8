@@ -8,7 +8,7 @@
 namespace Drupal\language\Form;
 
 use Drupal\Core\Block\BlockManagerInterface;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Component\Utility\Xss;
 use Drupal\Core\Config\ConfigFactoryInterface;
@@ -114,7 +114,7 @@ class NegotiationConfigureForm extends ConfigFormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormID() {
+  public function getFormId() {
     return 'language_negotiation_configure_form';
   }
 
@@ -209,7 +209,7 @@ class NegotiationConfigureForm extends ConfigFormBase {
     $this->blockManager->clearCachedDefinitions();
 
     $form_state->setRedirect('language.negotiation');
-    drupal_set_message($this->t('Language negotiation configuration saved.'));
+    drupal_set_message($this->t('Language detection configuration saved.'));
   }
 
   /**
@@ -236,7 +236,7 @@ class NegotiationConfigureForm extends ConfigFormBase {
       $configurable = $this->languageTypes->get('configurable');
       $table_form['configurable'] = array(
         '#type' => 'checkbox',
-        '#title' => $this->t('Customize %language_name language detection to differ from User interface text language detection settings', array('%language_name' => $info['name'])),
+        '#title' => $this->t('Customize %language_name language detection to differ from Interface text language detection settings', array('%language_name' => $info['name'])),
         '#default_value' => in_array($type, $configurable),
         '#attributes' => array('class' => array('language-customization-checkbox')),
         '#attached' => array(
@@ -277,7 +277,7 @@ class NegotiationConfigureForm extends ConfigFormBase {
 
       if (isset($types[$type])) {
         $table_form['#language_negotiation_info'][$method_id] = $method;
-        $method_name = String::checkPlain($method['name']);
+        $method_name = SafeMarkup::checkPlain($method['name']);
 
         $table_form['weight'][$method_id] = array(
           '#type' => 'weight',
@@ -334,7 +334,7 @@ class NegotiationConfigureForm extends ConfigFormBase {
     $blocks = $this->blockStorage->loadByProperties(array('theme' => $theme));
     foreach ($language_types as $language_type) {
       foreach ($blocks as $block) {
-        if (strpos($block->id, 'language_switcher_' . substr($language_type, 9)) !== FALSE) {
+        if ($block->getPluginId() == 'language_block:' . $language_type) {
           $block->delete();
         }
       }

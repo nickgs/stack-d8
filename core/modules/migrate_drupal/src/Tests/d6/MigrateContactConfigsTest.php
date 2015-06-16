@@ -10,14 +10,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 use Drupal\config\Tests\SchemaCheckTestTrait;
 use Drupal\migrate\MigrateMessage;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade variables to contact.settings.yml.
  *
  * @group migrate_drupal
  */
-class MigrateContactConfigsTest extends MigrateDrupalTestBase {
+class MigrateContactConfigsTest extends MigrateDrupal6TestBase {
 
   use SchemaCheckTestTrait;
 
@@ -56,9 +56,9 @@ class MigrateContactConfigsTest extends MigrateDrupalTestBase {
    */
   public function testContactSettings() {
     $config = $this->config('contact.settings');
-    $this->assertIdentical($config->get('user_default_enabled'), true);
-    $this->assertIdentical($config->get('flood.limit'), 3);
-    $this->assertIdentical($config->get('default_form'), 'some_other_category');
+    $this->assertIdentical(true, $config->get('user_default_enabled'));
+    $this->assertIdentical(3, $config->get('flood.limit'));
+    $this->assertIdentical('some_other_category', $config->get('default_form'));
     $this->assertConfigSchema(\Drupal::service('config.typed'), 'contact.settings', $config->get());
   }
 

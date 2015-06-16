@@ -9,13 +9,14 @@ namespace Drupal\system\Plugin\views\field;
 
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Routing\RedirectDestinationTrait;
 use Drupal\views\Plugin\views\display\DisplayPluginBase;
 use Drupal\views\Plugin\views\field\FieldPluginBase;
+use Drupal\views\Plugin\views\field\UncacheableFieldHandlerTrait;
 use Drupal\views\Plugin\views\style\Table;
 use Drupal\views\ResultRow;
 use Drupal\views\ViewExecutable;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
  * Defines a actions-based bulk operation form element.
@@ -23,6 +24,9 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  * @ViewsField("bulk_form")
  */
 class BulkForm extends FieldPluginBase {
+
+  use RedirectDestinationTrait;
+  use UncacheableFieldHandlerTrait;
 
   /**
    * The action storage.
@@ -81,7 +85,7 @@ class BulkForm extends FieldPluginBase {
    */
   protected function defineOptions() {
     $options = parent::defineOptions();
-    $options['action_title'] = array('default' => 'With selection');
+    $options['action_title'] = array('default' => $this->t('With selection'));
     $options['include_exclude'] = array(
       'default' => 'exclude',
     );
@@ -134,13 +138,6 @@ class BulkForm extends FieldPluginBase {
   /**
    * {@inheritdoc}
    */
-  public function render(ResultRow $values) {
-    return '<!--form-item-' . $this->options['id'] . '--' . $values->index . '-->';
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function preRender(&$values) {
     parent::preRender($values);
 
@@ -154,6 +151,12 @@ class BulkForm extends FieldPluginBase {
     }
   }
 
+  /**
+   * {@inheritdoc}
+   */
+  public function getValue(ResultRow $row, $field = NULL) {
+    return '<!--form-item-' . $this->options['id'] . '--' . $row->index . '-->';
+  }
 
   /**
    * Form constructor for the bulk form.
@@ -283,15 +286,21 @@ class BulkForm extends FieldPluginBase {
 
       $operation_definition = $action->getPluginDefinition();
       if (!empty($operation_definition['confirm_form_route_name'])) {
-        $form_state->setRedirect($operation_definition['confirm_form_route_name']);
+        $options = array(
+          'query' => $this->getDestinationArray(),
+        );
+        $form_state->setRedirect($operation_definition['confirm_form_route_name'], array(), $options);
       }
-
-      if ($count) {
-        drupal_set_message($this->formatPlural($count, '%action was applied to @count item.', '%action was applied to @count items.', array(
-          '%action' => $action->label(),
-        )));
+      else {
+        // Don't display the message unless there are some elements affected and
+        // there is no confirmation form.
+        $count = count(array_filter($form_state->getValue($this->options['id'])));
+        if ($count) {
+          drupal_set_message($this->formatPlural($count, '%action was applied to @count item.', '%action was applied to @count items.', array(
+            '%action' => $action->label(),
+          )));
+        }
       }
-
     }
   }
 
@@ -316,7 +325,7 @@ class BulkForm extends FieldPluginBase {
   }
 
   /**
-   * Overrides \Drupal\views\Plugin\views\Plugin\field\FieldPluginBase::query().
+   * {@inheritdoc}
    */
   public function query() {
   }

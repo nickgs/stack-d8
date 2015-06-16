@@ -8,6 +8,7 @@
 namespace Drupal\search\Tests;
 
 use Drupal\comment\Plugin\Field\FieldType\CommentItemInterface;
+use Drupal\comment\Tests\CommentTestTrait;
 use Drupal\Core\Url;
 
 /**
@@ -16,6 +17,8 @@ use Drupal\Core\Url;
  * @group search
  */
 class SearchRankingTest extends SearchTestBase {
+
+  use CommentTestTrait;
 
   /**
    * The node search page.
@@ -43,7 +46,7 @@ class SearchRankingTest extends SearchTestBase {
 
   public function testRankings() {
     // Add a comment field.
-    $this->container->get('comment.manager')->addDefaultField('node', 'page');
+    $this->addDefaultCommentField('node', 'page');
 
     // Build a list of the rankings to test.
     $node_ranks = array('sticky', 'promote', 'relevance', 'recent', 'comments', 'views');
@@ -146,7 +149,7 @@ class SearchRankingTest extends SearchTestBase {
     }
 
     // Try with sticky, then promoted. This is a test for issue
-    // https://drupal.org/node/771596.
+    // https://www.drupal.org/node/771596.
     $node_ranks = array(
       'sticky' => 10,
       'promote' => 1,
@@ -170,7 +173,8 @@ class SearchRankingTest extends SearchTestBase {
     $this->assertEqual($set[1]['node']->id(), $nodes['promote'][1]->id(), 'Search ranking for promoted second worked.');
 
     // Try with recent, then comments. This is a test for issues
-    // https://drupal.org/node/771596 and https://drupal.org/node/303574.
+    // https://www.drupal.org/node/771596 and
+    // https://www.drupal.org/node/303574.
     $node_ranks = array(
       'sticky' => 0,
       'promote' => 0,

@@ -10,7 +10,7 @@ label: test_comment_row
 module: views
 description: ''
 tag: ''
-base_table: comment
+base_table: comment_field_data
 base_field: cid
 core: 8.x
 display:
@@ -33,7 +33,7 @@ display:
           disable_sql_rewrite: false
           distinct: false
           replica: false
-          query_comment: false
+          query_comment: ''
           query_tags: {  }
       exposed_form:
         type: basic
@@ -98,7 +98,6 @@ display:
             html: false
           hide_empty: false
           empty_zero: false
-          link_to_comment: true
           relationship: none
           group_type: group
           admin_label: ''
@@ -113,8 +112,10 @@ display:
           element_default_classes: true
           empty: ''
           hide_alter_empty: true
-          link_to_entity: false
-          plugin_id: comment
+          type: string
+          settings:
+            link_to_entity: true
+          plugin_id: field
           entity_type: comment
           entity_field: subject
       filters:
@@ -147,8 +148,6 @@ display:
       footer: {  }
       empty: {  }
       arguments: {  }
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
   page_1:
     display_plugin: page
     id: page_1
@@ -156,5 +155,3 @@ display:
     position: 1
     display_options:
       path: test-comment-row
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null

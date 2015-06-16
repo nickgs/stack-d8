@@ -9,7 +9,8 @@
     attach: function (context) {
       var $context = $(context);
       var options = drupalSettings.contentTranslationDependentOptions;
-      var $fields, dependent_columns;
+      var $fields;
+      var dependent_columns;
 
       function fieldsChangeHandler($fields, dependent_columns) {
         return function (e) {
@@ -70,7 +71,7 @@
     attach: function (context) {
       // Initially hide all field rows for non translatable bundles and all column
       // rows for non translatable fields.
-      $(context).find('table .bundle-settings .translatable :input').once('translation-entity-admin-hide', function () {
+      $(context).find('table .bundle-settings .translatable :input').once('translation-entity-admin-hide').each(function () {
         var $input = $(this);
         var $bundleSettings = $input.closest('.bundle-settings');
         if (!$input.is(':checked')) {

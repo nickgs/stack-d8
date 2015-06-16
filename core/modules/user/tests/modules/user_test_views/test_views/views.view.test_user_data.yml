@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -8,7 +8,7 @@ label: test_user_data
 module: views
 description: ''
 tag: ''
-base_table: users
+base_table: users_field_data
 base_field: uid
 core: 8.x
 display:
@@ -51,9 +51,8 @@ display:
             html: false
           hide_empty: false
           empty_zero: false
-          link_to_user: true
-          overwrite_anonymous: false
-          plugin_id: user_name
+          plugin_id: field
+          type: user_name
           entity_type: user
           entity_field: name
         data:
@@ -82,7 +81,7 @@ display:
             suffix: ''
             target: ''
             nl2br: false
-            max_length: ''
+            max_length: 0
             word_boundary: true
             ellipsis: true
             more_link: false
@@ -112,7 +111,7 @@ display:
         uid:
           value:
             value: '2'
-          table: users
+          table: users_field_data
           field: uid
           id: uid
           expose:
@@ -130,5 +129,3 @@ display:
           plugin_id: date
           entity_type: user
           entity_field: created
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null

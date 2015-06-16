@@ -7,12 +7,14 @@
 
 namespace Drupal\field_ui\Tests;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Language\LanguageInterface;
+use Drupal\entity_reference\Tests\EntityReferenceTestTrait;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\simpletest\WebTestBase;
+use Drupal\taxonomy\Entity\Vocabulary;
 
 /**
  * Tests the Field UI "Manage fields" screen.
@@ -22,19 +24,49 @@ use Drupal\simpletest\WebTestBase;
 class ManageFieldsTest extends WebTestBase {
 
   use FieldUiTestTrait;
+  use EntityReferenceTestTrait;
 
   /**
-   * Modules to enable.
+   * Modules to install.
    *
    * @var array
    */
-  public static $modules = array('node', 'field_ui', 'field_test', 'taxonomy', 'image');
+  public static $modules = array('node', 'field_ui', 'field_test', 'taxonomy', 'image', 'block');
+
+  /**
+   * The ID of the custom content type created for testing.
+   *
+   * @var string
+   */
+  protected $contentType;
+
+  /**
+   * The label for a random field to be created for testing.
+   *
+   * @var string
+   */
+  protected $fieldLabel;
+
+  /**
+   * The input name of a random field to be created for testing.
+   *
+   * @var string
+   */
+  protected $fieldNameInput;
+
+  /**
+   * The name of a random field to be created for testing.
+   *
+   * @var string
+   */
+  protected $fieldName;
 
   /**
    * {@inheritdoc}
    */
   protected function setUp() {
     parent::setUp();
+    $this->drupalPlaceBlock('system_breadcrumb_block');
 
     // Create a test user.
     $admin_user = $this->drupalCreateUser(array('access content', 'administer content types', 'administer node fields', 'administer node form display', 'administer node display', 'administer taxonomy', 'administer taxonomy_term fields', 'administer taxonomy_term display', 'administer users', 'administer account settings', 'administer user display', 'bypass node access'));
@@ -43,37 +75,31 @@ class ManageFieldsTest extends WebTestBase {
     // Create content type, with underscores.
     $type_name = strtolower($this->randomMachineName(8)) . '_test';
     $type = $this->drupalCreateContentType(array('name' => $type_name, 'type' => $type_name));
-    $this->type = $type->id();
+    $this->contentType = $type->id();
 
     // Create random field name.
-    $this->field_label = $this->randomMachineName(8);
-    $this->field_name_input =  strtolower($this->randomMachineName(8));
-    $this->field_name = 'field_'. $this->field_name_input;
+    $this->fieldLabel = $this->randomMachineName(8);
+    $this->fieldNameInput =  strtolower($this->randomMachineName(8));
+    $this->fieldName = 'field_'. $this->fieldNameInput;
 
     // Create Basic page and Article node types.
     $this->drupalCreateContentType(array('type' => 'page', 'name' => 'Basic page'));
     $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
 
     // Create a vocabulary named "Tags".
-    $vocabulary = entity_create('taxonomy_vocabulary', array(
+    $vocabulary = Vocabulary::create(array(
       'name' => 'Tags',
       'vid' => 'tags',
       'langcode' => LanguageInterface::LANGCODE_NOT_SPECIFIED,
     ));
     $vocabulary->save();
 
-    entity_create('field_storage_config', array(
-      'field_name' => 'field_' . $vocabulary->id(),
-      'entity_type' => 'node',
-      'type' => 'taxonomy_term_reference',
-    ))->save();
-
-    entity_create('field_config', array(
-      'field_name' => 'field_' . $vocabulary->id(),
-      'entity_type' => 'node',
-      'label' => 'Tags',
-      'bundle' => 'article',
-    ))->save();
+    $handler_settings = array(
+      'target_bundles' => array(
+        $vocabulary->id() => $vocabulary->id(),
+      ),
+    );
+    $this->createEntityReferenceField('node', 'article', 'field_' . $vocabulary->id(), 'Tags', 'taxonomy_term', 'default', $handler_settings);
 
     entity_get_form_display('node', 'article', 'default')
       ->setComponent('field_' . $vocabulary->id())
@@ -104,7 +130,7 @@ class ManageFieldsTest extends WebTestBase {
    *   (optional) The name of a content type.
    */
   function manageFieldsPage($type = '') {
-    $type = empty($type) ? $this->type : $type;
+    $type = empty($type) ? $this->contentType : $type;
     $this->drupalGet('admin/structure/types/manage/' . $type . '/fields');
     // Check all table columns.
     $table_headers = array(
@@ -122,11 +148,29 @@ class ManageFieldsTest extends WebTestBase {
     $this->assertLink('Add field');
 
     // Assert entity operations for all fields.
-    $result = $this->xpath('//ul[@class = "dropbutton"]/li/a');
+    $number_of_links = 3;
+    $number_of_links_found = 0;
+    $operation_links = $this->xpath('//ul[@class = "dropbutton"]/li/a');
     $url = base_path() . "admin/structure/types/manage/$type/fields/node.$type.body";
-    $this->assertIdentical($url, (string) $result[0]['href']);
-    $this->assertIdentical("$url/storage", (string) $result[1]['href']);
-    $this->assertIdentical("$url/delete", (string) $result[2]['href']);
+
+    foreach ($operation_links as $link) {
+      switch ($link['title']) {
+        case 'Edit field settings.':
+          $this->assertIdentical($url, (string) $link['href']);
+          $number_of_links_found++;
+          break;
+        case 'Edit storage settings.':
+          $this->assertIdentical("$url/storage", (string) $link['href']);
+          $number_of_links_found++;
+          break;
+        case 'Delete field.':
+          $this->assertIdentical("$url/delete", (string) $link['href']);
+          $number_of_links_found++;
+          break;
+      }
+    }
+
+    $this->assertEqual($number_of_links, $number_of_links_found);
   }
 
   /**
@@ -137,37 +181,37 @@ class ManageFieldsTest extends WebTestBase {
    */
   function createField() {
     // Create a test field.
-    $this->fieldUIAddNewField('admin/structure/types/manage/' . $this->type, $this->field_name_input, $this->field_label);
+    $this->fieldUIAddNewField('admin/structure/types/manage/' . $this->contentType, $this->fieldNameInput, $this->fieldLabel);
   }
 
   /**
    * Tests editing an existing field.
    */
   function updateField() {
-    $field_id = 'node.' . $this->type . '.' . $this->field_name;
+    $field_id = 'node.' . $this->contentType . '.' . $this->fieldName;
     // Go to the field edit page.
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/' . $field_id . '/storage');
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/' . $field_id . '/storage');
 
     // Populate the field settings with new settings.
     $string = 'updated dummy test string';
     $edit = array(
-      'field_storage[settings][test_field_storage_setting]' => $string,
+      'settings[test_field_storage_setting]' => $string,
     );
     $this->drupalPostForm(NULL, $edit, t('Save field settings'));
 
     // Go to the field edit page.
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/' . $field_id);
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/' . $field_id);
     $edit = array(
-      'field[settings][test_field_setting]' => $string,
+      'settings[test_field_setting]' => $string,
     );
     $this->assertText(t('Default value'), 'Default value heading is shown');
     $this->drupalPostForm(NULL, $edit, t('Save settings'));
 
     // Assert the field settings are correct.
-    $this->assertFieldSettings($this->type, $this->field_name, $string);
+    $this->assertFieldSettings($this->contentType, $this->fieldName, $string);
 
     // Assert redirection back to the "manage fields" page.
-    $this->assertUrl('admin/structure/types/manage/' . $this->type . '/fields');
+    $this->assertUrl('admin/structure/types/manage/' . $this->contentType . '/fields');
   }
 
   /**
@@ -182,10 +226,10 @@ class ManageFieldsTest extends WebTestBase {
     // do not show up in the "Re-use existing field" list.
     $this->assertFalse($this->xpath('//select[@id="edit-existing-storage-name"]//option[@value="comment"]'), 'The list of options respects entity type restrictions.');
     // Validate the FALSE assertion above by also testing a valid one.
-    $this->assertTrue($this->xpath('//select[@id="edit-existing-storage-name"]//option[@value=:field_name]', array(':field_name' => $this->field_name)), 'The list of options shows a valid option.');
+    $this->assertTrue($this->xpath('//select[@id="edit-existing-storage-name"]//option[@value=:field_name]', array(':field_name' => $this->fieldName)), 'The list of options shows a valid option.');
 
     // Add a new field based on an existing field.
-    $this->fieldUIAddExistingField("admin/structure/types/manage/page", $this->field_name, $this->field_label . '_2');
+    $this->fieldUIAddExistingField("admin/structure/types/manage/page", $this->fieldName, $this->fieldLabel . '_2');
   }
 
   /**
@@ -200,22 +244,22 @@ class ManageFieldsTest extends WebTestBase {
     // Assert the cardinality other field cannot be empty when cardinality is
     // set to 'number'.
     $edit = array(
-      'field_storage[cardinality]' => 'number',
-      'field_storage[cardinality_number]' => '',
+      'cardinality' => 'number',
+      'cardinality_number' => '',
     );
     $this->drupalPostForm($field_edit_path, $edit, t('Save field settings'));
     $this->assertText('Number of values is required.');
 
     // Submit a custom number.
     $edit = array(
-      'field_storage[cardinality]' => 'number',
-      'field_storage[cardinality_number]' => 6,
+      'cardinality' => 'number',
+      'cardinality_number' => 6,
     );
     $this->drupalPostForm($field_edit_path, $edit, t('Save field settings'));
     $this->assertText('Updated field Body field settings.');
     $this->drupalGet($field_edit_path);
-    $this->assertFieldByXPath("//select[@name='field_storage[cardinality]']", 'number');
-    $this->assertFieldByXPath("//input[@name='field_storage[cardinality_number]']", 6);
+    $this->assertFieldByXPath("//select[@name='cardinality']", 'number');
+    $this->assertFieldByXPath("//input[@name='cardinality_number']", 6);
 
     // Check that tabs displayed.
     $this->assertLink(t('Edit'));
@@ -225,13 +269,13 @@ class ManageFieldsTest extends WebTestBase {
 
     // Set to unlimited.
     $edit = array(
-      'field_storage[cardinality]' => FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED,
+      'cardinality' => FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED,
     );
     $this->drupalPostForm($field_edit_path, $edit, t('Save field settings'));
     $this->assertText('Updated field Body field settings.');
     $this->drupalGet($field_edit_path);
-    $this->assertFieldByXPath("//select[@name='field_storage[cardinality]']", FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
-    $this->assertFieldByXPath("//input[@name='field_storage[cardinality_number]']", 1);
+    $this->assertFieldByXPath("//select[@name='cardinality']", FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+    $this->assertFieldByXPath("//input[@name='cardinality_number']", 1);
   }
 
   /**
@@ -239,9 +283,9 @@ class ManageFieldsTest extends WebTestBase {
    */
   protected function deleteField() {
     // Delete the field.
-    $field_id = 'node.' . $this->type . '.' . $this->field_name;
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/' . $field_id);
-    $this->drupalPostForm(NULL, array(), t('Delete field'));
+    $field_id = 'node.' . $this->contentType . '.' . $this->fieldName;
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/' . $field_id);
+    $this->clickLink(t('Delete'));
     $this->assertResponse(200);
   }
 
@@ -249,20 +293,24 @@ class ManageFieldsTest extends WebTestBase {
    * Tests that persistent field storage appears in the field UI.
    */
   protected function addPersistentFieldStorage() {
-    $field_storage = FieldStorageConfig::loadByName('node', $this->field_name);
+    $field_storage = FieldStorageConfig::loadByName('node', $this->fieldName);
     // Persist the field storage even if there are no fields.
     $field_storage->set('persist_with_no_fields', TRUE)->save();
     // Delete all instances of the field.
     foreach ($field_storage->getBundles() as $node_type) {
       // Delete all the body field instances.
-      $this->drupalPostForm('admin/structure/types/manage/' . $node_type . '/fields/node.' . $node_type . '.' . $this->field_name, array(), t('Delete field'));
+      $this->drupalGet('admin/structure/types/manage/' . $node_type . '/fields/node.' . $node_type . '.' . $this->fieldName);
+      $this->clickLink(t('Delete'));
       $this->drupalPostForm(NULL, array(), t('Delete'));
     }
     // Check "Re-use existing field" appears.
     $this->drupalGet('admin/structure/types/manage/page/fields/add-field');
     $this->assertRaw(t('Re-use an existing field'), '"Re-use existing field" was found.');
+
+    // Ensure that we test with a label that contains HTML.
+    $label = $this->randomString(4) . '<br/>' . $this->randomString(4);
     // Add a new field for the orphaned storage.
-    $this->fieldUIAddExistingField("admin/structure/types/manage/page", $this->field_name);
+    $this->fieldUIAddExistingField("admin/structure/types/manage/page", $this->fieldName, $label);
   }
 
   /**
@@ -304,13 +352,13 @@ class ManageFieldsTest extends WebTestBase {
       'label' => $field_exceed_max_length_label,
       'field_name' => $field_exceed_max_length_input,
     );
-    $this->drupalPostForm('admin/structure/types/manage/' . $this->type . '/fields/add-field', $edit, t('Save and continue'));
+    $this->drupalPostForm('admin/structure/types/manage/' . $this->contentType . '/fields/add-field', $edit, t('Save and continue'));
     $this->assertText('Machine-readable name cannot be longer than 22 characters but is currently 23 characters long.');
 
     // Create a valid field.
-    $this->fieldUIAddNewField('admin/structure/types/manage/' . $this->type, $this->field_name_input, $this->field_label);
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/node.' . $this->type . '.' . $field_prefix . $this->field_name_input);
-    $this->assertText(format_string('@label settings for @type', array('@label' => $this->field_label, '@type' => $this->type)));
+    $this->fieldUIAddNewField('admin/structure/types/manage/' . $this->contentType, $this->fieldNameInput, $this->fieldLabel);
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/node.' . $this->contentType . '.' . $field_prefix . $this->fieldNameInput);
+    $this->assertText(format_string('@label settings for @type', array('@label' => $this->fieldLabel, '@type' => $this->contentType)));
   }
 
   /**
@@ -319,23 +367,23 @@ class ManageFieldsTest extends WebTestBase {
   function testDefaultValue() {
     // Create a test field storage and field.
     $field_name = 'test';
-    entity_create('field_storage_config', array(
+    FieldStorageConfig::create(array(
       'field_name' => $field_name,
       'entity_type' => 'node',
       'type' => 'test_field'
     ))->save();
-    $field = entity_create('field_config', array(
+    $field = FieldConfig::create(array(
       'field_name' => $field_name,
       'entity_type' => 'node',
-      'bundle' => $this->type,
+      'bundle' => $this->contentType,
     ));
     $field->save();
 
-    entity_get_form_display('node', $this->type, 'default')
+    entity_get_form_display('node', $this->contentType, 'default')
       ->setComponent($field_name)
       ->save();
 
-    $admin_path = 'admin/structure/types/manage/' . $this->type . '/fields/' . $field->id();
+    $admin_path = 'admin/structure/types/manage/' . $this->contentType . '/fields/' . $field->id();
     $element_id = "edit-default-value-input-$field_name-0-value";
     $element_name = "default_value_input[{$field_name}][0][value]";
     $this->drupalGet($admin_path);
@@ -344,13 +392,13 @@ class ManageFieldsTest extends WebTestBase {
     // Check that invalid default values are rejected.
     $edit = array($element_name => '-1');
     $this->drupalPostForm($admin_path, $edit, t('Save settings'));
-    $this->assertText("$field_name does not accept the value -1", 'Form vaildation failed.');
+    $this->assertText("$field_name does not accept the value -1", 'Form validation failed.');
 
     // Check that the default value is saved.
     $edit = array($element_name => '1');
     $this->drupalPostForm($admin_path, $edit, t('Save settings'));
     $this->assertText("Saved $field_name configuration", 'The form was successfully submitted.');
-    $field = FieldConfig::loadByName('node', $this->type, $field_name);
+    $field = FieldConfig::loadByName('node', $this->contentType, $field_name);
     $this->assertEqual($field->default_value, array(array('value' => 1)), 'The default value was correctly saved.');
 
     // Check that the default value shows up in the form
@@ -361,29 +409,29 @@ class ManageFieldsTest extends WebTestBase {
     $edit = array($element_name => '');
     $this->drupalPostForm(NULL, $edit, t('Save settings'));
     $this->assertText("Saved $field_name configuration", 'The form was successfully submitted.');
-    $field = FieldConfig::loadByName('node', $this->type, $field_name);
+    $field = FieldConfig::loadByName('node', $this->contentType, $field_name);
     $this->assertEqual($field->default_value, NULL, 'The default value was correctly saved.');
 
     // Check that the default value can be empty when the field is marked as
     // required and can store unlimited values.
     $field_storage = FieldStorageConfig::loadByName('node', $field_name);
-    $field_storage->cardinality = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $field_storage->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
     $field_storage->save();
 
     $this->drupalGet($admin_path);
     $edit = array(
-      'field[required]' => 1,
+      'required' => 1,
     );
     $this->drupalPostForm(NULL, $edit, t('Save settings'));
 
     $this->drupalGet($admin_path);
     $this->drupalPostForm(NULL, array(), t('Save settings'));
     $this->assertText("Saved $field_name configuration", 'The form was successfully submitted.');
-    $field = FieldConfig::loadByName('node', $this->type, $field_name);
+    $field = FieldConfig::loadByName('node', $this->contentType, $field_name);
     $this->assertEqual($field->default_value, NULL, 'The default value was correctly saved.');
 
     // Check that the default widget is used when the field is hidden.
-    entity_get_form_display($field->entity_type, $field->bundle, 'default')
+    entity_get_form_display($field->getTargetEntityTypeId(), $field->getTargetBundle(), 'default')
       ->removeComponent($field_name)->save();
     $this->drupalGet($admin_path);
     $this->assertFieldById($element_id, '', 'The default value widget was displayed when field is hidden.');
@@ -394,8 +442,8 @@ class ManageFieldsTest extends WebTestBase {
    */
   function testDeleteField() {
     // Create a new field.
-    $bundle_path1 = 'admin/structure/types/manage/' . $this->type;
-    $this->fieldUIAddNewField($bundle_path1, $this->field_name_input, $this->field_label);
+    $bundle_path1 = 'admin/structure/types/manage/' . $this->contentType;
+    $this->fieldUIAddNewField($bundle_path1, $this->fieldNameInput, $this->fieldLabel);
 
     // Create an additional node type.
     $type_name2 = strtolower($this->randomMachineName(8)) . '_test';
@@ -404,23 +452,23 @@ class ManageFieldsTest extends WebTestBase {
 
     // Add a field to the second node type.
     $bundle_path2 = 'admin/structure/types/manage/' . $type_name2;
-    $this->fieldUIAddExistingField($bundle_path2, $this->field_name, $this->field_label);
+    $this->fieldUIAddExistingField($bundle_path2, $this->fieldName, $this->fieldLabel);
 
     // Delete the first field.
-    $this->fieldUIDeleteField($bundle_path1, "node.$this->type.$this->field_name", $this->field_label, $this->type);
+    $this->fieldUIDeleteField($bundle_path1, "node.$this->contentType.$this->fieldName", $this->fieldLabel, $this->contentType);
 
     // Check that the field was deleted.
-    $this->assertNull(FieldConfig::loadByName('node', $this->type, $this->field_name), 'Field was deleted.');
+    $this->assertNull(FieldConfig::loadByName('node', $this->contentType, $this->fieldName), 'Field was deleted.');
     // Check that the field storage was not deleted
-    $this->assertNotNull(FieldStorageConfig::loadByName('node', $this->field_name), 'Field storage was not deleted.');
+    $this->assertNotNull(FieldStorageConfig::loadByName('node', $this->fieldName), 'Field storage was not deleted.');
 
     // Delete the second field.
-    $this->fieldUIDeleteField($bundle_path2, "node.$type_name2.$this->field_name", $this->field_label, $type_name2);
+    $this->fieldUIDeleteField($bundle_path2, "node.$type_name2.$this->fieldName", $this->fieldLabel, $type_name2);
 
     // Check that the field was deleted.
-    $this->assertNull(FieldConfig::loadByName('node', $type_name2, $this->field_name), 'Field was deleted.');
+    $this->assertNull(FieldConfig::loadByName('node', $type_name2, $this->fieldName), 'Field was deleted.');
     // Check that the field storage was deleted too.
-    $this->assertNull(FieldStorageConfig::loadByName('node', $this->field_name), 'Field storage was deleted.');
+    $this->assertNull(FieldStorageConfig::loadByName('node', $this->fieldName), 'Field storage was deleted.');
   }
 
   /**
@@ -438,13 +486,13 @@ class ManageFieldsTest extends WebTestBase {
 
     // Try with an entity key.
     $edit['field_name'] = 'title';
-    $bundle_path = 'admin/structure/types/manage/' . $this->type;
+    $bundle_path = 'admin/structure/types/manage/' . $this->contentType;
     $this->drupalPostForm("$bundle_path/fields/add-field",  $edit, t('Save and continue'));
     $this->assertText(t('The machine-readable name is already in use. It must be unique.'));
 
     // Try with a base field.
     $edit['field_name'] = 'sticky';
-    $bundle_path = 'admin/structure/types/manage/' . $this->type;
+    $bundle_path = 'admin/structure/types/manage/' . $this->contentType;
     $this->drupalPostForm("$bundle_path/fields/add-field",  $edit, t('Save and continue'));
     $this->assertText(t('The machine-readable name is already in use. It must be unique.'));
   }
@@ -454,9 +502,9 @@ class ManageFieldsTest extends WebTestBase {
    */
   function testLockedField() {
     // Create a locked field and attach it to a bundle. We need to do this
-    // programatically as there's no way to create a locked field through UI.
+    // programmatically as there's no way to create a locked field through UI.
     $field_name = strtolower($this->randomMachineName(8));
-    $field_storage = entity_create('field_storage_config', array(
+    $field_storage = FieldStorageConfig::create(array(
       'field_name' => $field_name,
       'entity_type' => 'node',
       'type' => 'test_field',
@@ -464,25 +512,25 @@ class ManageFieldsTest extends WebTestBase {
       'locked' => TRUE
     ));
     $field_storage->save();
-    entity_create('field_config', array(
+    FieldConfig::create(array(
       'field_storage' => $field_storage,
-      'bundle' => $this->type,
+      'bundle' => $this->contentType,
     ))->save();
-    entity_get_form_display('node', $this->type, 'default')
+    entity_get_form_display('node', $this->contentType, 'default')
       ->setComponent($field_name, array(
         'type' => 'test_field_widget',
       ))
       ->save();
 
     // Check that the links for edit and delete are not present.
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields');
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields');
     $locked = $this->xpath('//tr[@id=:field_name]/td[4]', array(':field_name' => $field_name));
     $this->assertTrue(in_array('Locked', $locked), 'Field is marked as Locked in the UI');
     $edit_link = $this->xpath('//tr[@id=:field_name]/td[4]', array(':field_name' => $field_name));
     $this->assertFalse(in_array('edit', $edit_link), 'Edit option for locked field is not present the UI');
     $delete_link = $this->xpath('//tr[@id=:field_name]/td[4]', array(':field_name' => $field_name));
     $this->assertFalse(in_array('delete', $delete_link), 'Delete option for locked field is not present the UI');
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/node.' . $this->type . '.' . $field_name . '/delete');
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/node.' . $this->contentType . '.' . $field_name . '/delete');
     $this->assertResponse(403);
   }
 
@@ -491,32 +539,32 @@ class ManageFieldsTest extends WebTestBase {
    */
   function testHiddenFields() {
     // Check that the field type is not available in the 'add new field' row.
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields/add-field');
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields/add-field');
     $this->assertFalse($this->xpath('//select[@id="edit-new-storage-type"]//option[@value="hidden_test_field"]'), "The 'add new field' select respects field types 'no_ui' property.");
     $this->assertTrue($this->xpath('//select[@id="edit-new-storage-type"]//option[@value="shape"]'), "The 'add new field' select shows a valid option.");
 
     // Create a field storage and a field programmatically.
     $field_name = 'hidden_test_field';
-    entity_create('field_storage_config', array(
+    FieldStorageConfig::create(array(
       'field_name' => $field_name,
       'entity_type' => 'node',
       'type' => $field_name,
     ))->save();
     $field = array(
       'field_name' => $field_name,
-      'bundle' => $this->type,
+      'bundle' => $this->contentType,
       'entity_type' => 'node',
       'label' => t('Hidden field'),
     );
-    entity_create('field_config', $field)->save();
-    entity_get_form_display('node', $this->type, 'default')
+    FieldConfig::create($field)->save();
+    entity_get_form_display('node', $this->contentType, 'default')
       ->setComponent($field_name)
       ->save();
-    $this->assertTrue(FieldConfig::load('node.' . $this->type . '.' . $field_name), format_string('A field of the field storage %field was created programmatically.', array('%field' => $field_name)));
+    $this->assertTrue(FieldConfig::load('node.' . $this->contentType . '.' . $field_name), format_string('A field of the field storage %field was created programmatically.', array('%field' => $field_name)));
 
     // Check that the newly added field appears on the 'Manage Fields'
     // screen.
-    $this->drupalGet('admin/structure/types/manage/' . $this->type . '/fields');
+    $this->drupalGet('admin/structure/types/manage/' . $this->contentType . '/fields');
     $this->assertFieldByXPath('//table[@id="field-overview"]//tr[@id="hidden-test-field"]//td[1]', $field['label'], 'Field was created and appears in the overview page.');
 
     // Check that the field does not appear in the 're-use existing field' row
@@ -529,10 +577,10 @@ class ManageFieldsTest extends WebTestBase {
     $field_types = \Drupal::service('plugin.manager.field.field_type')->getDefinitions();
     foreach ($field_types as $field_type => $definition) {
       if (empty($definition['no_ui'])) {
-        $this->assertTrue($this->xpath('//select[@id="edit-new-storage-type"]//option[@value=:field_type]', array(':field_type' => $field_type)), String::format('Configurable field type @field_type is available.', array('@field_type' => $field_type)));
+        $this->assertTrue($this->xpath('//select[@id="edit-new-storage-type"]//option[@value=:field_type]', array(':field_type' => $field_type)), SafeMarkup::format('Configurable field type @field_type is available.', array('@field_type' => $field_type)));
       }
       else {
-        $this->assertFalse($this->xpath('//select[@id="edit-new-storage-type"]//option[@value=:field_type]', array(':field_type' => $field_type)), String::format('Non-configurable field type @field_type is not available.', array('@field_type' => $field_type)));
+        $this->assertFalse($this->xpath('//select[@id="edit-new-storage-type"]//option[@value=:field_type]', array(':field_type' => $field_type)), SafeMarkup::format('Non-configurable field type @field_type is not available.', array('@field_type' => $field_type)));
       }
     }
   }
@@ -546,7 +594,7 @@ class ManageFieldsTest extends WebTestBase {
     $options = array(
       'type' => $type2,
     );
-    $this->drupalPostForm('admin/structure/types/manage/' . $this->type, $options, t('Save content type'));
+    $this->drupalPostForm('admin/structure/types/manage/' . $this->contentType, $options, t('Save content type'));
     $this->manageFieldsPage($type2);
   }
 
@@ -559,9 +607,9 @@ class ManageFieldsTest extends WebTestBase {
     $edit = array(
       'field_name' => 'tags',
       'label' => $this->randomMachineName(),
-      'new_storage_type' => 'taxonomy_term_reference',
+      'new_storage_type' => 'entity_reference',
     );
-    $url = 'admin/structure/types/manage/' . $this->type . '/fields/add-field';
+    $url = 'admin/structure/types/manage/' . $this->contentType . '/fields/add-field';
     $this->drupalPostForm($url, $edit, t('Save and continue'));
 
     $this->assertText(t('The machine-readable name is already in use. It must be unique.'));
@@ -575,15 +623,15 @@ class ManageFieldsTest extends WebTestBase {
     // Create a new field.
     $bundle_path = 'admin/structure/taxonomy/manage/tags/overview';
 
-    $this->fieldUIAddNewField($bundle_path, $this->field_name_input, $this->field_label);
+    $this->fieldUIAddNewField($bundle_path, $this->fieldNameInput, $this->fieldLabel);
 
     // Delete the field.
-    $this->fieldUIDeleteField($bundle_path, "taxonomy_term.tags.$this->field_name", $this->field_label, 'Tags');
+    $this->fieldUIDeleteField($bundle_path, "taxonomy_term.tags.$this->fieldName", $this->fieldLabel, 'Tags');
 
     // Check that the field was deleted.
-    $this->assertNull(FieldConfig::loadByName('taxonomy_term', 'tags', $this->field_name), 'Field was deleted.');
+    $this->assertNull(FieldConfig::loadByName('taxonomy_term', 'tags', $this->fieldName), 'Field was deleted.');
     // Check that the field storage was deleted too.
-    $this->assertNull(FieldStorageConfig::loadByName('taxonomy_term', $this->field_name), 'Field storage was deleted.');
+    $this->assertNull(FieldStorageConfig::loadByName('taxonomy_term', $this->fieldName), 'Field storage was deleted.');
   }
 
   /**
@@ -591,13 +639,13 @@ class ManageFieldsTest extends WebTestBase {
    */
   function testHelpDescriptions() {
     // Create an image field
-    entity_create('field_storage_config', array(
+    FieldStorageConfig::create(array(
       'field_name' => 'field_image',
       'entity_type' => 'node',
       'type' => 'image',
     ))->save();
 
-    entity_create('field_config', array(
+    FieldConfig::create(array(
       'field_name' => 'field_image',
       'entity_type' => 'node',
       'label' => 'Image',
@@ -607,7 +655,7 @@ class ManageFieldsTest extends WebTestBase {
     entity_get_form_display('node', 'article', 'default')->setComponent('field_image')->save();
 
     $edit = array(
-      'field[description]' => '<strong>Test with an upload field.',
+      'description' => '<strong>Test with an upload field.',
     );
     $this->drupalPostForm('admin/structure/types/manage/article/fields/node.article.field_image', $edit, t('Save settings'));
 
@@ -617,7 +665,7 @@ class ManageFieldsTest extends WebTestBase {
     $this->assertText('From hook_field_widget_form_alter(): Default form is true.', 'Default value form in hook_field_widget_form_alter().');
 
     $edit = array(
-      'field[description]' => '<em>Test with a non upload field.',
+      'description' => '<em>Test with a non upload field.',
     );
     $this->drupalPostForm('admin/structure/types/manage/article/fields/node.article.field_tags', $edit, t('Save settings'));
 
@@ -631,7 +679,37 @@ class ManageFieldsTest extends WebTestBase {
    */
   function fieldListAdminPage() {
     $this->drupalGet('admin/reports/fields');
-    $this->assertText($this->field_name, 'Field name is displayed in field list.');
-    $this->assertTrue($this->assertLinkByHref('admin/structure/types/manage/' . $this->type . '/fields'), 'Link to content type using field is displayed in field list.');
+    $this->assertText($this->fieldName, 'Field name is displayed in field list.');
+    $this->assertTrue($this->assertLinkByHref('admin/structure/types/manage/' . $this->contentType . '/fields'), 'Link to content type using field is displayed in field list.');
   }
+
+  /**
+   * Tests the "preconfigured field" functionality.
+   *
+   * @see \Drupal\Core\Field\PreconfiguredFieldUiOptionsInterface
+   */
+  public function testPreconfiguredFields() {
+    $this->drupalGet('admin/structure/types/manage/article/fields/add-field');
+
+    // Check that the preconfigured field option exist alongside the regular
+    // field type option.
+    $this->assertOption('edit-new-storage-type', 'field_ui:test_field_with_preconfigured_options:custom_options');
+    $this->assertOption('edit-new-storage-type', 'test_field_with_preconfigured_options');
+
+    // Add a field with every possible preconfigured value.
+    $this->fieldUIAddNewField(NULL, 'test_custom_options', 'Test label', 'field_ui:test_field_with_preconfigured_options:custom_options');
+    $field_storage = FieldStorageConfig::loadByName('node', 'field_test_custom_options');
+    $this->assertEqual($field_storage->getCardinality(), FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+    $this->assertEqual($field_storage->getSetting('test_field_storage_setting'), 'preconfigured_storage_setting');
+
+    $field = FieldConfig::loadByName('node', 'article', 'field_test_custom_options');
+    $this->assertTrue($field->isRequired());
+    $this->assertEqual($field->getSetting('test_field_setting'), 'preconfigured_field_setting');
+
+    $form_display = entity_get_form_display('node', 'article', 'default');
+    $this->assertEqual($form_display->getComponent('field_test_custom_options')['type'], 'test_field_widget_multiple');
+    $view_display = entity_get_display('node', 'article', 'default');
+    $this->assertEqual($view_display->getComponent('field_test_custom_options')['type'], 'field_test_multiple');
+  }
+
 }

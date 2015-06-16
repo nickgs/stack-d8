@@ -8,10 +8,10 @@
 namespace Drupal\file\Entity;
 
 use Drupal\Core\Entity\ContentEntityBase;
+use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
-use Drupal\Core\Language\LanguageInterface;
 use Drupal\file\FileInterface;
 use Drupal\user\UserInterface;
 
@@ -25,7 +25,6 @@ use Drupal\user\UserInterface;
  *     "storage" = "Drupal\file\FileStorage",
  *     "storage_schema" = "Drupal\file\FileStorageSchema",
  *     "access" = "Drupal\file\FileAccessControlHandler",
- *     "view_builder" = "Drupal\Core\Entity\EntityViewBuilder",
  *     "views_data" = "Drupal\file\FileViewsData",
  *   },
  *   base_table = "file_managed",
@@ -38,6 +37,8 @@ use Drupal\user\UserInterface;
  * )
  */
 class File extends ContentEntityBase implements FileInterface {
+
+  use EntityChangedTrait;
 
   /**
    * {@inheritdoc}
@@ -185,7 +186,7 @@ class File extends ContentEntityBase implements FileInterface {
 
     // Automatically detect filemime if not set.
     if (!isset($values['filemime']) && isset($values['uri'])) {
-      $values['filemime'] = file_get_mimetype($values['uri']);
+      $values['filemime'] = \Drupal::service('file.mime_type.guesser')->guess($values['uri']);
     }
   }
 
@@ -255,6 +256,7 @@ class File extends ContentEntityBase implements FileInterface {
 
     $fields['filemime'] = BaseFieldDefinition::create('string')
       ->setLabel(t('File MIME type'))
+      ->setSetting('is_ascii', TRUE)
       ->setDescription(t("The file's MIME type."));
 
     $fields['filesize'] = BaseFieldDefinition::create('integer')

@@ -8,7 +8,7 @@
 namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 use Drupal\node\Entity\Node;
 
 /**
@@ -16,15 +16,20 @@ use Drupal\node\Entity\Node;
  *
  * @group migrate_drupal
  */
-class MigrateBookTest extends MigrateDrupalTestBase {
+class MigrateBookTest extends MigrateDrupal6TestBase {
 
-  public static $modules = array('book');
+  public static $modules = array('book', 'system', 'node', 'field', 'text', 'entity_reference', 'user');
 
   /**
    * {@inheritdoc}
    */
   protected function setUp() {
     parent::setUp();
+
+    $this->installEntitySchema('node');
+    $this->installSchema('book', array('book'));
+    $this->installSchema('node', array('node_access'));
+
     $id_mappings = array();
     for ($i = 4; $i <= 8; $i++) {
       $entity = entity_create('node', array(
@@ -55,28 +60,28 @@ class MigrateBookTest extends MigrateDrupalTestBase {
    */
   public function testBook() {
     $nodes = Node::loadMultiple(array(4, 5, 6, 7, 8));
-    $this->assertEqual($nodes[4]->book['bid'], 4);
-    $this->assertEqual($nodes[4]->book['pid'], 0);
+    $this->assertIdentical('4', $nodes[4]->book['bid']);
+    $this->assertIdentical('0', $nodes[4]->book['pid']);
 
-    $this->assertEqual($nodes[5]->book['bid'], 4);
-    $this->assertEqual($nodes[5]->book['pid'], 4);
+    $this->assertIdentical('4', $nodes[5]->book['bid']);
+    $this->assertIdentical('4', $nodes[5]->book['pid']);
 
-    $this->assertEqual($nodes[6]->book['bid'], 4);
-    $this->assertEqual($nodes[6]->book['pid'], 5);
+    $this->assertIdentical('4', $nodes[6]->book['bid']);
+    $this->assertIdentical('5', $nodes[6]->book['pid']);
 
-    $this->assertEqual($nodes[7]->book['bid'], 4);
-    $this->assertEqual($nodes[7]->book['pid'], 5);
+    $this->assertIdentical('4', $nodes[7]->book['bid']);
+    $this->assertIdentical('5', $nodes[7]->book['pid']);
 
-    $this->assertEqual($nodes[8]->book['bid'], 8);
-    $this->assertEqual($nodes[8]->book['pid'], 0);
+    $this->assertIdentical('8', $nodes[8]->book['bid']);
+    $this->assertIdentical('0', $nodes[8]->book['pid']);
 
     $tree = \Drupal::service('book.manager')->bookTreeAllData(4);
-    $this->assertEqual($tree['49990 Node 4 4']['link']['nid'], 4);
-    $this->assertEqual($tree['49990 Node 4 4']['below']['50000 Node 5 5']['link']['nid'], 5);
-    $this->assertEqual($tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 6 6']['link']['nid'], 6);
-    $this->assertEqual($tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 7 7']['link']['nid'], 7);
-    $this->assertIdentical($tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 6 6']['below'], array());
-    $this->assertIdentical($tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 7 7']['below'], array());
+    $this->assertIdentical('4', $tree['49990 Node 4 4']['link']['nid']);
+    $this->assertIdentical('5', $tree['49990 Node 4 4']['below']['50000 Node 5 5']['link']['nid']);
+    $this->assertIdentical('6', $tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 6 6']['link']['nid']);
+    $this->assertIdentical('7', $tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 7 7']['link']['nid']);
+    $this->assertIdentical(array(), $tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 6 6']['below']);
+    $this->assertIdentical(array(), $tree['49990 Node 4 4']['below']['50000 Node 5 5']['below']['50000 Node 7 7']['below']);
   }
 
 }

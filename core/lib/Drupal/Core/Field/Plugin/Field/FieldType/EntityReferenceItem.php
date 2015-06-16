@@ -29,7 +29,9 @@ use Drupal\Core\TypedData\DataReferenceDefinition;
  *   id = "entity_reference",
  *   label = @Translation("Entity reference"),
  *   description = @Translation("An entity field containing an entity reference."),
+ *   category = @Translation("Reference"),
  *   no_ui = TRUE,
+ *   default_formatter = "entity_reference_label",
  *   list_class = "\Drupal\Core\Field\EntityReferenceFieldItemList",
  *   constraints = {"ValidReference" = {}}
  * )
@@ -58,7 +60,8 @@ class EntityReferenceItem extends FieldItemBase {
    */
   public static function defaultFieldSettings() {
     return array(
-      'handler' => 'default',
+      'handler' => 'default:' . (\Drupal::moduleHandler()->moduleExists('node') ? 'node' : 'user'),
+      'handler_settings' => array(),
     ) + parent::defaultFieldSettings();
   }
 
@@ -71,7 +74,7 @@ class EntityReferenceItem extends FieldItemBase {
 
     if ($target_type_info->isSubclassOf('\Drupal\Core\Entity\FieldableEntityInterface')) {
       // @todo: Lookup the entity type's ID data type and use it here.
-      // https://drupal.org/node/2107249
+      // https://www.drupal.org/node/2107249
       $target_id_definition = DataDefinition::create('integer')
         ->setLabel(t('@label ID', array($target_type_info->getLabel())))
         ->setSetting('unsigned', TRUE);
@@ -89,12 +92,17 @@ class EntityReferenceItem extends FieldItemBase {
       // The entity object is computed out of the entity ID.
       ->setComputed(TRUE)
       ->setReadOnly(FALSE)
-      ->setTargetDefinition(EntityDataDefinition::create($settings['target_type']));
+      ->setTargetDefinition(EntityDataDefinition::create($settings['target_type']))
+      ->addConstraint('EntityType', $settings['target_type']);
 
     if (isset($settings['target_bundle'])) {
-      $properties['entity']->getTargetDefinition()->addConstraint('Bundle', $settings['target_bundle']);
+      $properties['entity']->addConstraint('Bundle', $settings['target_bundle']);
+      // Set any further bundle constraints on the target definition as well,
+      // such that it can derive more special data types if possible. For
+      // example, "entity:node:page" instead of "entity:node".
+      $properties['entity']->getTargetDefinition()
+        ->addConstraint('Bundle', $settings['target_bundle']);
     }
-
     return $properties;
   }
 
@@ -125,7 +133,7 @@ class EntityReferenceItem extends FieldItemBase {
       $columns = array(
         'target_id' => array(
           'description' => 'The ID of the target entity.',
-          'type' => 'varchar',
+          'type' => 'varchar_ascii',
           // If the target entities act as bundles for another entity type,
           // their IDs should not exceed the maximum length for bundles.
           'length' => $target_type_info->getBundleOf() ? EntityTypeInterface::BUNDLE_MAX_LENGTH : 255,
@@ -284,6 +292,27 @@ class EntityReferenceItem extends FieldItemBase {
       }
     }
     return $dependencies;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function onDependencyRemoval(FieldDefinitionInterface $field_definition, array $dependencies) {
+    $changed = FALSE;
+    if (!empty($field_definition->default_value)) {
+      $target_entity_type = \Drupal::entityManager()->getDefinition($field_definition->getFieldStorageDefinition()->getSetting('target_type'));
+      foreach ($field_definition->default_value as $key => $default_value) {
+        if (is_array($default_value) && isset($default_value['target_uuid'])) {
+          $entity = \Drupal::entityManager()->loadEntityByUuid($target_entity_type->id(), $default_value['target_uuid']);
+          // @see \Drupal\Core\Field\EntityReferenceFieldItemList::processDefaultValue()
+          if ($entity && isset($dependencies[$entity->getConfigDependencyKey()][$entity->getConfigDependencyName()])) {
+            unset($field_definition->default_value[$key]);
+            $changed = TRUE;
+          }
+        }
+      }
+    }
+    return $changed;
   }
 
 }

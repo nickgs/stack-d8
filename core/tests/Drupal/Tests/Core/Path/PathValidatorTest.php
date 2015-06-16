@@ -81,6 +81,18 @@ class PathValidatorTest extends UnitTestCase {
   }
 
   /**
+   * Tests the isValid() method for <none> (used for jumplinks).
+   *
+   * @covers ::isValid
+   */
+  public function testIsValidWithNone() {
+    $this->accessAwareRouter->expects($this->never())
+      ->method('match');
+
+    $this->assertTrue($this->pathValidator->isValid('<none>'));
+  }
+
+  /**
    * Tests the isValid() method for an external URL.
    *
    * @covers ::isValid
@@ -89,7 +101,7 @@ class PathValidatorTest extends UnitTestCase {
     $this->accessAwareRouter->expects($this->never())
       ->method('match');
 
-    $this->assertTrue($this->pathValidator->isValid('https://drupal.org'));
+    $this->assertTrue($this->pathValidator->isValid('https://www.drupal.org'));
   }
 
   /**

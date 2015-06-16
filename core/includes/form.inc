@@ -7,7 +7,6 @@
 
 use Drupal\Component\Utility\NestedArray;
 use Drupal\Component\Utility\SafeMarkup;
-use Drupal\Component\Utility\String;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Component\Utility\Xss;
 use Drupal\Core\Database\Database;
@@ -17,18 +16,6 @@ use Drupal\Core\Render\Element;
 use Drupal\Core\Template\Attribute;
 use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\RedirectResponse;
-
-/**
- * Retrieves, populates, and processes a form.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal::formBuilder()->submitForm().
- *
- * @see \Drupal\Core\Form\FormBuilderInterface::submitForm().
- */
-function drupal_form_submit($form_arg, FormStateInterface $form_state) {
-  \Drupal::formBuilder()->submitForm($form_arg, $form_state);
-}
 
 /**
  * Prepares variables for select element templates.
@@ -109,7 +96,7 @@ function form_select_options($element, $choices = NULL) {
   $options = '';
   foreach ($choices as $key => $choice) {
     if (is_array($choice)) {
-      $options .= '<optgroup label="' . String::checkPlain($key) . '">';
+      $options .= '<optgroup label="' . SafeMarkup::checkPlain($key) . '">';
       $options .= form_select_options($element, $choice);
       $options .= '</optgroup>';
     }
@@ -125,7 +112,7 @@ function form_select_options($element, $choices = NULL) {
       else {
         $selected = '';
       }
-      $options .= '<option value="' . String::checkPlain($key) . '"' . $selected . '>' . String::checkPlain($choice) . '</option>';
+      $options .= '<option value="' . SafeMarkup::checkPlain($key) . '"' . $selected . '>' . SafeMarkup::checkPlain($choice) . '</option>';
     }
   }
   return SafeMarkup::set($options);
@@ -364,7 +351,7 @@ function template_preprocess_textarea(&$variables) {
   Element\RenderElement::setAttributes($element, array('form-textarea'));
   $variables['wrapper_attributes'] = new Attribute();
   $variables['attributes'] = new Attribute($element['#attributes']);
-  $variables['value'] = String::checkPlain($element['#value']);
+  $variables['value'] = SafeMarkup::checkPlain($element['#value']);
   $variables['resizable'] = !empty($element['#resizable']) ? $element['#resizable'] : NULL;
   $variables['required'] = !empty($element['#required']) ? $element['#required'] : NULL;
 }
@@ -416,15 +403,9 @@ function template_preprocess_form_element(&$variables) {
   // \Drupal::formBuilder()->doBuildForm().
   $element += array(
     '#title_display' => 'before',
+    '#wrapper_attributes' => array(),
   );
-
-  // Take over any #wrapper_attributes defined by the element.
-  // @todo Temporary hack for #type 'item'.
-  // @see http://drupal.org/node/1829202
-  $variables['attributes'] = array();
-  if (isset($element['#wrapper_attributes'])) {
-    $variables['attributes'] = $element['#wrapper_attributes'];
-  }
+  $variables['attributes'] = $element['#wrapper_attributes'];
 
   // Add element #id for #type 'item'.
   if (isset($element['#markup']) && !empty($element['#id'])) {
@@ -553,7 +534,7 @@ function template_preprocess_form_element_label(&$variables) {
  * Note: if the batch 'title', 'init_message', 'progress_message', or
  * 'error_message' could contain any user input, it is the responsibility of
  * the code calling batch_set() to sanitize them first with a function like
- * \Drupal\Component\Utility\String::checkPlain() or
+ * \Drupal\Component\Utility\SafeMarkup::checkPlain() or
  * \Drupal\Component\Utility\Xss::filter(). Furthermore, if the batch operation
  * returns any user input in the 'results' or 'message' keys of $context, it
  * must also sanitize them first.
@@ -580,8 +561,8 @@ function template_preprocess_form_element_label(&$variables) {
  *
  *   $nodes = entity_load_multiple_by_properties('node', array('uid' => $uid, 'type' => $type));
  *   $node = reset($nodes);
- *   $context['results'][] = $node->id() . ' : ' . String::checkPlain($node->label());
- *   $context['message'] = String::checkPlain($node->label());
+ *   $context['results'][] = $node->id() . ' : ' . SafeMarkup::checkPlain($node->label());
+ *   $context['message'] = SafeMarkup::checkPlain($node->label());
  * }
  *
  * // A more advanced example is a multi-step operation that loads all rows,
@@ -600,10 +581,10 @@ function template_preprocess_form_element_label(&$variables) {
  *     ->range(0, $limit)
  *     ->execute();
  *   foreach ($result as $row) {
- *     $context['results'][] = $row->id . ' : ' . String::checkPlain($row->title);
+ *     $context['results'][] = $row->id . ' : ' . SafeMarkup::checkPlain($row->title);
  *     $context['sandbox']['progress']++;
  *     $context['sandbox']['current_id'] = $row->id;
- *     $context['message'] = String::checkPlain($row->title);
+ *     $context['message'] = SafeMarkup::checkPlain($row->title);
  *   }
  *   if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
  *     $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
@@ -613,7 +594,7 @@ function template_preprocess_form_element_label(&$variables) {
  *
  * Sample callback_batch_finished():
  * @code
- * function batch_test_finished($success, $results, $operations) {
+ * function my_finished_callback($success, $results, $operations) {
  *   // The 'success' parameter means no fatal PHP errors were detected. All
  *   // other error management should be handled using 'results'.
  *   if ($success) {
@@ -682,6 +663,20 @@ function template_preprocess_form_element_label(&$variables) {
  *     the batch.
  *   - safe_strings: Internal use only. Used to store and retrieve strings
  *     marked as safe between requests.
+ *   - progressive: A Boolean that indicates whether or not the batch needs to
+ *     run progressively. TRUE indicates that the batch will run in more than
+ *     one run. FALSE (default) indicates that the batch will finish in a single
+ *     run.
+ *   - queue: An override of the default queue (with name and class fields
+ *     optional). An array containing two elements:
+ *     - name: Unique identifier for the queue.
+ *     - class: The name of a class that implements
+ *       \Drupal\Core\Queue\QueueInterface, including the full namespace but not
+ *       starting with a backslash. It must have a constructor with two
+ *       arguments: $name and a \Drupal\Core\Database\Connection object.
+ *       Typically, the class will either be \Drupal\Core\Queue\Batch or
+ *       \Drupal\Core\Queue\BatchMemory. Defaults to Batch if progressive is
+ *       TRUE, or to BatchMemory if progressive is FALSE.
  */
 function batch_set($batch_definition) {
   if ($batch_definition) {
@@ -745,9 +740,10 @@ function batch_set($batch_definition) {
  * This function is generally not needed in form submit handlers;
  * Form API takes care of batches that were set during form submission.
  *
- * @param $redirect
- *   (optional) Path to redirect to when the batch has finished processing.
- * @param $url
+ * @param \Drupal\Core\Url|string $redirect
+ *   (optional) Either path or Url object to redirect to when the batch has
+ *   finished processing.
+ * @param \Drupal\Core\Url $url
  *   (optional - should only be used for separate scripts like update.php)
  *   URL of the batch processing page.
  * @param $redirect_callback
@@ -757,7 +753,7 @@ function batch_set($batch_definition) {
  * @return \Symfony\Component\HttpFoundation\RedirectResponse|null
  *   A redirect response if the batch is progressive. No return value otherwise.
  */
-function batch_process($redirect = NULL, $url = 'batch', $redirect_callback = NULL) {
+function batch_process($redirect = NULL, Url $url = NULL, $redirect_callback = NULL) {
   $batch =& batch_get();
 
   if (isset($batch)) {
@@ -765,8 +761,7 @@ function batch_process($redirect = NULL, $url = 'batch', $redirect_callback = NU
     $process_info = array(
       'current_set' => 0,
       'progressive' => TRUE,
-      'url' => $url,
-      'url_options' => array(),
+      'url' => isset($url) ? $url : Url::fromRoute('system.batch_page.html'),
       'source_url' => Url::fromRouteMatch(\Drupal::routeMatch()),
       'batch_redirect' => $redirect,
       'theme' => \Drupal::theme()->getActiveTheme()->getName(),
@@ -793,7 +788,16 @@ function batch_process($redirect = NULL, $url = 'batch', $redirect_callback = NU
     if ($batch['progressive']) {
       // Now that we have a batch id, we can generate the redirection link in
       // the generic error message.
-      $batch['error_message'] = t('Please continue to <a href="@error_url">the error page</a>', array('@error_url' => _url($url, array('query' => array('id' => $batch['id'], 'op' => 'finished')))));
+      /** @var \Drupal\Core\Url $batch_url */
+      $batch_url = $batch['url'];
+      /** @var \Drupal\Core\Url $error_url */
+      $error_url = clone $batch_url;
+      $query_options = $error_url->getOption('query');
+      $query_options['id'] = $batch['id'];
+      $query_options['op'] = 'finished';
+      $error_url->setOption('query', $query_options);
+
+      $batch['error_message'] = t('Please continue to <a href="@error_url">the error page</a>', array('@error_url' => $error_url->toString()));
 
       // Clear the way for the redirection to the batch processing page, by
       // saving and unsetting the 'destination', if there is any.
@@ -815,13 +819,15 @@ function batch_process($redirect = NULL, $url = 'batch', $redirect_callback = NU
       $_SESSION['batches'][$batch['id']] = TRUE;
 
       // Redirect for processing.
-      $options = array('query' => array('op' => 'start', 'id' => $batch['id']));
+      $query_options = $error_url->getOption('query');
+      $query_options['op'] = 'start';
+      $query_options['id'] = $batch['id'];
+      $batch_url->setOption('query', $query_options);
       if (($function = $batch['redirect_callback']) && function_exists($function)) {
-        $function($batch['url'], $options);
+        $function($batch_url->toString(), ['query' => $query_options]);
       }
       else {
-        $options['absolute'] = TRUE;
-        return new RedirectResponse(_url($batch['url'], $options));
+        return new RedirectResponse($batch_url->setAbsolute()->toString());
       }
     }
     else {
@@ -904,7 +910,7 @@ function _batch_queue($batch_set) {
     $class = $batch_set['queue']['class'];
 
     if (!isset($queues[$class][$name])) {
-      $queues[$class][$name] = new $class($name, Database::getConnection());
+      $queues[$class][$name] = new $class($name, \Drupal::database());
     }
     return $queues[$class][$name];
   }

@@ -7,6 +7,7 @@
 
 namespace Drupal\views\Tests\Plugin;
 
+use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\views\Views;
 use Drupal\views_test_data\Plugin\views\display\DisplayTest as DisplayTestPlugin;
 
@@ -59,7 +60,7 @@ class DisplayTest extends PluginTestBase {
 
     $this->assertTrue(isset($displays['display_test_1']), 'Added display has been assigned to "display_test_1"');
 
-    // Check the the display options are like expected.
+    // Check the display options are like expected.
     $options = array(
       'display_options' => array(),
       'display_plugin' => 'display_test',
@@ -120,12 +121,12 @@ class DisplayTest extends PluginTestBase {
 
     $this->clickLink('Test option title');
 
-    $this->randomString = $this->randomString();
-    $this->drupalPostForm(NULL, array('test_option' => $this->randomString), t('Apply'));
+    $test_option = $this->randomString();
+    $this->drupalPostForm(NULL, array('test_option' => $test_option), t('Apply'));
 
     // Check the new value has been saved by checking the UI summary text.
     $this->drupalGet('admin/structure/views/view/test_view/edit/display_test_1');
-    $this->assertRaw($this->randomString);
+    $this->assertLink($test_option);
 
     // Test the enable/disable status of a display.
     $view->display_handler->setOption('enabled', FALSE);
@@ -176,7 +177,7 @@ class DisplayTest extends PluginTestBase {
     $output = $view->preview();
     $output = drupal_render($output);
 
-    $this->drupalSetContent($output);
+    $this->setRawContent($output);
     $result = $this->xpath('//a[@class=:class]', array(':class' => 'more-link'));
     $this->assertEqual($result[0]->attributes()->href, \Drupal::url('view.test_display_more.page_1'), 'The right more link is shown.');
     $this->assertEqual(trim($result[0][0]), $expected_more_text, 'The right link text is shown.');
@@ -185,7 +186,7 @@ class DisplayTest extends PluginTestBase {
     // tested.
     $more_link = $view->display_handler->renderMoreLink();
     $more_link = drupal_render($more_link);
-    $this->drupalSetContent($more_link);
+    $this->setRawContent($more_link);
     $result = $this->xpath('//a[@class=:class]', array(':class' => 'more-link'));
     $this->assertEqual($result[0]->attributes()->href, \Drupal::url('view.test_display_more.page_1'), 'The right more link is shown.');
     $this->assertEqual(trim($result[0][0]), $expected_more_text, 'The right link text is shown.');
@@ -201,7 +202,7 @@ class DisplayTest extends PluginTestBase {
     $this->executeView($view);
     $output = $view->preview();
     $output = drupal_render($output);
-    $this->drupalSetContent($output);
+    $this->setRawContent($output);
     $result = $this->xpath('//a[@class=:class]', array(':class' => 'more-link'));
     $this->assertTrue(empty($result), 'The more link is not shown.');
 
@@ -219,13 +220,39 @@ class DisplayTest extends PluginTestBase {
     $this->executeView($view);
     $output = $view->preview();
     $output = drupal_render($output);
-    $this->drupalSetContent($output);
+    $this->setRawContent($output);
     $result = $this->xpath('//a[@class=:class]', array(':class' => 'more-link'));
     $this->assertTrue(empty($result), 'The more link is not shown when view has more records.');
 
     // Test the default value of use_more_always.
     $view = entity_create('view')->getExecutable();
     $this->assertTrue($view->getDisplay()->getOption('use_more_always'), 'Always display the more link by default.');
+  }
+
+  /**
+   * Tests the readmore validation.
+   */
+  public function testReadMoreNoDisplay() {
+    $view = Views::getView('test_display_more');
+    // Confirm that the view validates when there is a page display.
+    $errors = $view->validate();
+    $this->assertTrue(empty($errors), 'More link validation has no errors.');
+
+    // Confirm that the view does not validate when the page display is disabled.
+    $view->setDisplay('page_1');
+    $view->display_handler->setOption('enabled', FALSE);
+    $view->setDisplay('default');
+    $errors = $view->validate();
+    $this->assertTrue(!empty($errors), 'More link validation has some errors.');
+    $this->assertEqual($errors['default'][0], 'Display "Master" uses a "more" link but there are no displays it can link to. You need to specify a custom URL.', 'More link validation has the right error.');
+
+    // Confirm that the view does not validate when the page display does not exist.
+    $view = Views::getView('test_view');
+    $view->setDisplay('default');
+    $view->display_handler->setOption('use_more', 1);
+    $errors = $view->validate();
+    $this->assertTrue(!empty($errors), 'More link validation has some errors.');
+    $this->assertEqual($errors['default'][0], 'Display "Master" uses a "more" link but there are no displays it can link to. You need to specify a custom URL.', 'More link validation has the right error.');
   }
 
   /**
@@ -318,6 +345,55 @@ class DisplayTest extends PluginTestBase {
     $this->executeView($view);
     $this->assertFalse(count($view->result), 'Ensure the result of the view is empty.');
     $this->assertTrue($view->display_handler->outputIsEmpty(), 'Ensure the view output is marked as empty.');
+  }
+
+  /**
+   * Test translation rendering settings based on entity translatability.
+   */
+  public function testTranslationSetting() {
+    \Drupal::service('module_installer')->install(['file']);
+    \Drupal::service('router.builder')->rebuild();
+
+    // By default there should be no language settings.
+    $this->checkTranslationSetting();
+    \Drupal::service('module_installer')->install(['language']);
+
+    // Enabling the language module should not make a difference.
+    $this->checkTranslationSetting();
+
+    // Making the site multilingual should let translatable entity types support
+    // translation rendering.
+    ConfigurableLanguage::createFromLangcode('it')->save();
+    $this->checkTranslationSetting(TRUE);
+  }
+
+  /**
+   * Asserts a node and a file based view for the translation setting.
+   *
+   * The file based view should never expose that setting. The node based view
+   * should if the site is multilingual.
+   *
+   * @param bool $expected_node_translatability
+   *   Whether the node based view should be expected to support translation
+   *   settings.
+   */
+  protected function checkTranslationSetting($expected_node_translatability = FALSE) {
+    $not_supported_text = 'The view is not based on a translatable entity type or the site is not multilingual.';
+    $supported_text = 'All content that supports translations will be displayed in the selected language.';
+
+    $this->drupalGet('admin/structure/views/nojs/display/content/page_1/rendering_language');
+    if ($expected_node_translatability) {
+      $this->assertNoText($not_supported_text);
+      $this->assertText($supported_text);
+    }
+    else {
+      $this->assertText($not_supported_text);
+      $this->assertNoText($supported_text);
+    }
+
+    $this->drupalGet('admin/structure/views/nojs/display/files/page_1/rendering_language');
+    $this->assertText($not_supported_text);
+    $this->assertNoText($supported_text);
   }
 
 }

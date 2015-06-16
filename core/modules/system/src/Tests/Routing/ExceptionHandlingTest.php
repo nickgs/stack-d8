@@ -7,7 +7,7 @@
 
 namespace Drupal\system\Tests\Routing;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\simpletest\KernelTestBase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -48,7 +48,7 @@ class ExceptionHandlingTest extends KernelTestBase {
 
     $this->assertEqual($response->getStatusCode(), Response::HTTP_FORBIDDEN);
     $this->assertEqual($response->headers->get('Content-type'), 'application/json');
-    $this->assertEqual('{}', $response->getContent());
+    $this->assertEqual('{"message":""}', $response->getContent());
   }
 
   /**
@@ -65,7 +65,7 @@ class ExceptionHandlingTest extends KernelTestBase {
 
     $this->assertEqual($response->getStatusCode(), Response::HTTP_NOT_FOUND);
     $this->assertEqual($response->headers->get('Content-type'), 'application/json');
-    $this->assertEqual('{}', $response->getContent());
+    $this->assertEqual('{"message":"No route found for \\u0022GET \\/not-found\\u0022"}', $response->getContent());
   }
 
   /**
@@ -119,7 +119,7 @@ class ExceptionHandlingTest extends KernelTestBase {
 
     // Test both that the backtrace is properly escaped, and that the unescaped
     // string is not output at all.
-    $this->assertTrue(strpos($response->getContent(), String::checkPlain('<script>alert(\'xss\')</script>')) !== FALSE);
+    $this->assertTrue(strpos($response->getContent(), SafeMarkup::checkPlain('<script>alert(\'xss\')</script>')) !== FALSE);
     $this->assertTrue(strpos($response->getContent(), '<script>alert(\'xss\')</script>') === FALSE);
   }
 

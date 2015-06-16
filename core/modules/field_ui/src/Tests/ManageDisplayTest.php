@@ -10,7 +10,9 @@ namespace Drupal\field_ui\Tests;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Language\LanguageInterface;
+use Drupal\node\Entity\NodeType;
 use Drupal\simpletest\WebTestBase;
+use Drupal\taxonomy\Entity\Vocabulary;
 
 /**
  * Tests the Field UI "Manage display" and "Manage form display" screens.
@@ -22,17 +24,18 @@ class ManageDisplayTest extends WebTestBase {
   use FieldUiTestTrait;
 
   /**
-   * Modules to enable.
+   * Modules to install.
    *
    * @var array
    */
-  public static $modules = array('node', 'field_ui', 'taxonomy', 'search', 'field_test', 'field_third_party_test');
+  public static $modules = array('node', 'field_ui', 'taxonomy', 'search', 'field_test', 'field_third_party_test', 'block');
 
   /**
    * {@inheritdoc}
    */
   protected function setUp() {
     parent::setUp();
+    $this->drupalPlaceBlock('system_breadcrumb_block');
 
     // Create a test user.
     $admin_user = $this->drupalCreateUser(array('access content', 'administer content types', 'administer node fields', 'administer node form display', 'administer node display', 'administer taxonomy', 'administer taxonomy_term fields', 'administer taxonomy_term display', 'administer users', 'administer account settings', 'administer user display', 'bypass node access'));
@@ -44,7 +47,7 @@ class ManageDisplayTest extends WebTestBase {
     $this->type = $type->id();
 
     // Create a default vocabulary.
-    $vocabulary = entity_create('taxonomy_vocabulary', array(
+    $vocabulary = Vocabulary::create(array(
       'name' => $this->randomMachineName(),
       'description' => $this->randomMachineName(),
       'vid' => Unicode::strtolower($this->randomMachineName()),
@@ -374,13 +377,13 @@ class ManageDisplayTest extends WebTestBase {
    */
   function testNoFieldsDisplayOverview() {
     // Create a fresh content type without any fields.
-    entity_create('node_type', array(
+    NodeType::create(array(
       'type' => 'no_fields',
       'name' => 'No fields',
     ))->save();
 
     $this->drupalGet('admin/structure/types/manage/no_fields/display');
-    $this->assertRaw(t('There are no fields yet added. You can add new fields on the <a href="@link">Manage fields</a> page.', array('@link' => \Drupal::url('entity.node_type.field_ui_fields', array('node_type' => 'no_fields')))));
+    $this->assertRaw(t('There are no fields yet added. You can add new fields on the <a href="@link">Manage fields</a> page.', array('@link' => \Drupal::url('entity.node.field_ui_fields', array('node_type' => 'no_fields')))));
   }
 
   /**
@@ -446,7 +449,7 @@ class ManageDisplayTest extends WebTestBase {
     \Drupal::entityManager()->clearCachedFieldDefinitions();
 
     // Save current content so that we can restore it when we're done.
-    $old_content = $this->drupalGetContent();
+    $old_content = $this->getRawContent();
 
     // Render a cloned node, so that we do not alter the original.
     $clone = clone $node;
@@ -455,12 +458,12 @@ class ManageDisplayTest extends WebTestBase {
     $this->verbose(t('Rendered node - view mode: @view_mode', array('@view_mode' => $view_mode)) . '<hr />'. $output);
 
     // Assign content so that WebTestBase functions can be used.
-    $this->drupalSetContent($output);
+    $this->setRawContent($output);
     $method = ($not_exists ? 'assertNoText' : 'assertText');
     $return = $this->{$method}((string) $text, $message);
 
     // Restore previous content.
-    $this->drupalSetContent($old_content);
+    $this->setRawContent($old_content);
 
     return $return;
   }

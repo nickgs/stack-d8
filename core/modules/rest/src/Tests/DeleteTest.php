@@ -7,7 +7,7 @@
 
 namespace Drupal\rest\Tests;
 
-use Drupal\rest\Tests\RESTTestBase;
+use Drupal\Core\Url;
 
 /**
  * Tests the deletion of resources.
@@ -53,7 +53,7 @@ class DeleteTest extends RESTTestBase {
       $this->assertEqual($response, '', 'Response body is empty.');
 
       // Try to delete an entity that does not exist.
-      $response = $this->httpRequest($entity_type . '/9999', 'DELETE');
+      $response = $this->httpRequest(Url::fromRoute('entity.' . $entity_type . '.canonical', [$entity_type => 9999]), 'DELETE');
       $this->assertResponse(404);
       $this->assertText('The requested page could not be found.');
 
@@ -70,9 +70,11 @@ class DeleteTest extends RESTTestBase {
     $this->enableService(FALSE);
     $account = $this->drupalCreateUser();
     $this->drupalLogin($account);
-    $this->httpRequest('entity/user/' . $account->id(), 'DELETE');
-    $user = entity_load('user', $account->id(), TRUE);
+    $this->httpRequest($account->urlInfo(), 'DELETE');
+    $user_storage = $this->container->get('entity.manager')->getStorage('user');
+    $user_storage->resetCache(array($account->id()));
+    $user = $user_storage->load($account->id());
     $this->assertEqual($account->id(), $user->id(), 'User still exists in the database.');
-    $this->assertResponse(404);
+    $this->assertResponse(405);
   }
 }

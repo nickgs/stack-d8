@@ -18,6 +18,7 @@ use Drupal\Core\TypedData\DataDefinition;
  *   id = "list_string",
  *   label = @Translation("List (text)"),
  *   description = @Translation("This field stores text values from a list of allowed 'value => label' pairs, i.e. 'US States': IL => Illinois, IA => Iowa, IN => Indiana."),
+ *   category = @Translation("Text"),
  *   default_widget = "options_select",
  *   default_formatter = "list_default",
  * )
@@ -72,6 +73,13 @@ class ListStringItem extends ListItemBase {
     if (Unicode::strlen($option) > 255) {
       return t('Allowed values list: each key must be a string at most 255 characters long.');
     }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected static function castAllowedValue($value) {
+    return (string) $value;
   }
 
 }

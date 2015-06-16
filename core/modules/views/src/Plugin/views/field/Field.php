@@ -8,35 +8,29 @@
 namespace Drupal\views\Plugin\views\field;
 
 use Drupal\Component\Utility\SafeMarkup;
-use Drupal\Component\Utility\Xss;
+use Drupal\Component\Utility\Xss as CoreXss;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityManagerInterface;
-use Drupal\Core\Entity\EntityStorageInterface;
-use Drupal\Core\Field\BaseFieldDefinition;
-use Drupal\Core\Field\FieldConfigInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Field\FieldTypePluginManagerInterface;
 use Drupal\Core\Field\FormatterPluginManager;
 use Drupal\Core\Form\FormHelper;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Language\LanguageManagerInterface;
 use Drupal\Core\Render\Element;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountInterface;
-use Drupal\field\FieldStorageConfigInterface;
-use Drupal\field\Views\FieldAPIHandlerTrait;
+use Drupal\views\FieldAPIHandlerTrait;
+use Drupal\views\Entity\Render\EntityFieldRenderer;
 use Drupal\views\Plugin\CacheablePluginInterface;
 use Drupal\views\Plugin\views\display\DisplayPluginBase;
-use Drupal\views\Plugin\views\field\FieldPluginBase;
-use Drupal\views\Plugin\views\field\MultiItemsFieldHandlerInterface;
 use Drupal\views\ResultRow;
 use Drupal\views\ViewExecutable;
-use Drupal\views\Views;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
- * A field that displays fieldapi fields.
+ * A field that displays entity field data.
  *
  * @ingroup views_field_handlers
  *
@@ -45,7 +39,6 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * @ViewsField("field")
  */
 class Field extends FieldPluginBase implements CacheablePluginInterface, MultiItemsFieldHandlerInterface {
-
   use FieldAPIHandlerTrait;
 
   /**
@@ -119,6 +112,13 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
   protected $fieldTypePluginManager;
 
   /**
+   * Static cache for ::getEntityFieldRenderer().
+   *
+   * @var \Drupal\views\Entity\Render\EntityFieldRenderer
+   */
+  protected $entityFieldRenderer;
+
+  /**
    * Constructs a \Drupal\field\Plugin\views\field\Field object.
    *
    * @param array $configuration
@@ -171,7 +171,7 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
   }
 
   /**
-   * Overrides \Drupal\views\Plugin\views\field\FieldPluginBase::init().
+   * {@inheritdoc}
    */
   public function init(ViewExecutable $view, DisplayPluginBase $display, array &$options = NULL) {
     parent::init($view, $display, $options);
@@ -197,10 +197,17 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
 
       // Otherwise, we only limit values if the user hasn't selected "all", 0, or
       // the value matching field cardinality.
-      if ((intval($this->options['delta_limit']) && ($this->options['delta_limit'] != $cardinality)) || intval($this->options['delta_offset'])) {
+      if ((($this->options['delta_limit'] > 0) && ($this->options['delta_limit'] != $cardinality)) || intval($this->options['delta_offset'])) {
         $this->limit_values = TRUE;
       }
     }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function getEntityManager() {
+    return $this->entityManager;
   }
 
   /**
@@ -247,24 +254,10 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
     if ($this->add_field_table($use_groupby)) {
       $this->ensureMyTable();
       $this->addAdditionalFields($fields);
-
-      // If we are grouping by something on this field, we want to group by
-      // the displayed value, which is translated. So, we need to figure out
-      // which language should be used to translate the value. See also
-      // $this->field_langcode().
-      $field = $field_definition;
-      if ($field->isTranslatable() && !empty($this->view->display_handler->options['field_langcode_add_to_query'])) {
-        $column = $this->tableAlias . '.langcode';
-        $langcode = $this->view->display_handler->options['field_langcode'];
-        $substitutions = static::queryLanguageSubstitutions();
-        if (isset($substitutions[$langcode])) {
-          $langcode = $substitutions[$langcode];
-        }
-        $placeholder = $this->placeholder();
-        $langcode_fallback_candidates = $this->languageManager->getFallbackCandidates(array('langcode' => $langcode, 'operation' => 'views_query', 'data' => $this));
-        $this->query->addWhereExpression(0, "$column IN($placeholder) OR $column IS NULL", array($placeholder => $langcode_fallback_candidates));
-      }
     }
+
+    // Let the entity field renderer alter the query if needed.
+    $this->getEntityFieldRenderer()->query($this->query, $this->relationship);
   }
 
   /**
@@ -365,9 +358,15 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
       'default' => $default_column,
     );
 
-    $options['type'] = array(
-      'default' => isset($field_type['default_formatter']) ? $field_type['default_formatter'] : '',
-    );
+    if (isset($this->definition['default_formatter'])) {
+      $options['type'] = ['default' => $this->definition['default_formatter']];
+    }
+    elseif (isset($field_type['default_formatter'])) {
+      $options['type'] = ['default' => $field_type['default_formatter']];
+    }
+    else {
+      $options['type'] = ['default' => ''];
+    }
 
     $options['settings'] = array(
       'default' => isset($this->definition['default_formatter_settings']) ? $this->definition['default_formatter_settings'] : [],
@@ -386,7 +385,7 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
     // If we know the exact number of allowed values, then that can be
     // the default. Otherwise, default to 'all'.
     $options['delta_limit'] = array(
-      'default' => ($field_storage_definition->getCardinality() > 1) ? $field_storage_definition->getCardinality() : 'all',
+      'default' => ($field_storage_definition->getCardinality() > 1) ? $field_storage_definition->getCardinality() : 0,
     );
     $options['delta_offset'] = array(
       'default' => 0,
@@ -671,6 +670,7 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
    */
   public function renderItems($items) {
     if (!empty($items)) {
+      $items = $this->prepareItemsByDelta($items);
       if ($this->options['multi_type'] == 'separator' || !$this->options['group_rows']) {
         $separator = $this->options['multi_type'] == 'separator' ? SafeMarkup::checkAdminXss($this->options['separator']) : '';
         $build = [
@@ -692,6 +692,110 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
   }
 
   /**
+   * Adapts the $items according to the delta configuration.
+   *
+   * This selects displayed deltas, reorders items, and takes offsets into
+   * account.
+   *
+   * @param array $all_values
+   *   The items for individual rendering.
+   *
+   * @return array
+   *   The manipulated items.
+   */
+  protected function prepareItemsByDelta(array $all_values) {
+    if ($this->options['delta_reversed']) {
+      $all_values = array_reverse($all_values);
+    }
+
+    // We are supposed to show only certain deltas.
+    if ($this->limit_values) {
+      $row = $this->view->result[$this->view->row_index];
+
+      // Offset is calculated differently when row grouping for a field is not
+      // enabled. Since there are multiple rows, delta needs to be taken into
+      // account, so that different values are shown per row.
+      if (!$this->options['group_rows'] && isset($this->aliases['delta']) && isset($row->{$this->aliases['delta']})) {
+        $delta_limit = 1;
+        $offset = $row->{$this->aliases['delta']};
+      }
+      // Single fields don't have a delta available so choose 0.
+      elseif (!$this->options['group_rows'] && !$this->multiple) {
+        $delta_limit = 1;
+        $offset = 0;
+      }
+      else {
+        $delta_limit = $this->options['delta_limit'];
+        $offset = intval($this->options['delta_offset']);
+
+        // We should only get here in this case if there is an offset, and in
+        // that case we are limiting to all values after the offset.
+        if ($delta_limit === 0) {
+          $delta_limit = count($all_values) - $offset;
+        }
+      }
+
+      // Determine if only the first and last values should be shown.
+      $delta_first_last = $this->options['delta_first_last'];
+
+      $new_values = array();
+      for ($i = 0; $i < $delta_limit; $i++) {
+        $new_delta = $offset + $i;
+
+        if (isset($all_values[$new_delta])) {
+          // If first-last option was selected, only use the first and last
+          // values.
+          if (!$delta_first_last
+            // Use the first value.
+            || $new_delta == $offset
+            // Use the last value.
+            || $new_delta == ($delta_limit + $offset - 1)) {
+            $new_values[] = $all_values[$new_delta];
+          }
+        }
+      }
+      $all_values = $new_values;
+    }
+
+    return $all_values;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function preRender(&$values) {
+    parent::preRender($values);
+    $this->getEntityFieldRenderer()->preRender($values);
+  }
+
+  /**
+   * Returns the entity field renderer.
+   *
+   * @return \Drupal\views\Entity\Render\EntityFieldRenderer
+   *   The entity field renderer.
+   */
+  protected function getEntityFieldRenderer() {
+    if (!isset($this->entityFieldRenderer)) {
+      // This can be invoked during field handler initialization in which case
+      // view fields are not set yet.
+      if (!empty($this->view->field)) {
+        foreach ($this->view->field as $field) {
+          // An entity field renderer can handle only a single relationship.
+          if ($field->relationship == $this->relationship && isset($field->entityFieldRenderer)) {
+            $this->entityFieldRenderer = $field->entityFieldRenderer;
+            break;
+          }
+        }
+      }
+      if (!isset($this->entityFieldRenderer)) {
+        $entity_type = $this->entityManager->getDefinition($this->getEntityType());
+        $this->entityFieldRenderer = new EntityFieldRenderer($this->view, $this->relationship, $this->languageManager, $entity_type, $this->entityManager);
+      }
+    }
+    return $this->entityFieldRenderer;
+  }
+
+  /**
    * Gets an array of items for the field.
    *
    * @param \Drupal\views\ResultRow $values
@@ -701,80 +805,77 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
    *   An array of items for the field.
    */
   public function getItems(ResultRow $values) {
-    $original_entity = $this->getEntity($values);
-    if (!$original_entity) {
-      return array();
+    if (!$this->displayHandler->useGroupBy()) {
+      $build_list = $this->getEntityFieldRenderer()->render($values, $this);
     }
-    $entity = $this->process_entity($values, $original_entity);
-    if (!$entity) {
-      return array();
+    else {
+      // For grouped results we need to retrieve a massaged entity having
+      // grouped field values to ensure that "grouped by" values, especially
+      // those with multiple cardinality work properly. See
+      // \Drupal\views\Tests\QueryGroupByTest::testGroupByFieldWithCardinality.
+      $display = [
+        'type' => $this->options['type'],
+        'settings' => $this->options['settings'],
+        'label' => 'hidden',
+      ];
+      $build_list = $this->createEntityForGroupBy($this->getEntity($values), $values)
+        ->{$this->definition['field_name']}
+        ->view($display);
     }
 
-    $display = array(
-      'type' => $this->options['type'],
-      'settings' => $this->options['settings'],
-      'label' => 'hidden',
-    );
-    $render_array = $entity->get($this->definition['field_name'])->view($display);
+    if (!$build_list) {
+      return [];
+    }
 
-    $items = array();
     if ($this->options['field_api_classes']) {
-      return array(array('rendered' => $this->renderer->render($render_array)));
+      return [['rendered' => $this->renderer->render($build_list)]];
     }
 
-    foreach (Element::children($render_array) as $count) {
-      $items[$count]['rendered'] = $render_array[$count];
-      // FieldItemListInterface::view() adds an #access property to the render
-      // array that determines whether or not the current user is allowed to
-      // view the field in the context of the current entity. We need to respect
-      // this parameter when we pull out the children of the field array for
-      // rendering.
-      if (isset($render_array['#access'])) {
-        $items[$count]['rendered']['#access'] = $render_array['#access'];
+    // Render using the formatted data itself.
+    $items = [];
+    foreach (Element::children($build_list) as $delta) {
+      $items[$delta]['rendered'] = $build_list[$delta];
+      // Merge the cacheability metadata of the top-level render array into
+      // each child because they will most likely be rendered individually.
+      if (isset($build_list['#cache'])) {
+        CacheableMetadata::createFromRenderArray($build_list)
+          ->merge(CacheableMetadata::createFromRenderArray($items[$delta]['rendered']))
+          ->applyTo($items[$delta]['rendered']);
       }
-      // Only add the raw field items (for use in tokens) if the current user
-      // has access to view the field content.
-      if ((!isset($items[$count]['rendered']['#access']) || $items[$count]['rendered']['#access']) && !empty($render_array['#items'][$count])) {
-        $items[$count]['raw'] = $render_array['#items'][$count];
-      }
+      // Add the raw field items (for use in tokens).
+      $items[$delta]['raw'] = $build_list['#items'][$delta];
     }
     return $items;
   }
 
   /**
-   * Process an entity before using it for rendering.
+   * Creates a fake entity with grouped field values.
    *
-   * Replaces values with aggregated values if aggregation is enabled.
-   * Takes delta settings into account (@todo remove in #1758616).
-   *
-   * @param \Drupal\views\ResultRow $values
-   *   The result row object containing the values.
    * @param \Drupal\Core\Entity\EntityInterface $entity
    *   The entity to be processed.
+   * @param \Drupal\views\ResultRow $row
+   *   The result row object containing the values.
    *
-   * @return
-   *   TRUE if the processing completed successfully, otherwise FALSE.
+   * @return bool|\Drupal\Core\Entity\FieldableEntityInterface
+   *   Returns a new entity object containing the grouped field values.
    */
-  function process_entity(ResultRow $values, EntityInterface $entity) {
-    $processed_entity = clone $entity;
+  protected function createEntityForGroupBy(EntityInterface $entity, ResultRow $row) {
+    // Retrieve the correct translation object.
+    $processed_entity = clone $this->getEntityFieldRenderer()->getEntityTranslation($entity, $row);
 
-    $langcode = $this->field_langcode($processed_entity);
-    $processed_entity = $processed_entity->getTranslation($langcode);
-
-    // If we are grouping, copy our group fields into the cloned entity.
-    // It's possible this will cause some weirdness, but there's only
-    // so much we can hope to do.
-    if (!empty($this->group_fields)) {
+    // Copy our group fields into the cloned entity. It is possible this will
+    // cause some weirdness, but there is only so much we can hope to do.
+    if (!empty($this->group_fields) && isset($entity->{$this->definition['field_name']})) {
       // first, test to see if we have a base value.
       $base_value = array();
       // Note: We would copy original values here, but it can cause problems.
-      // For example, text fields store cached filtered values as
-      // 'safe_value' which doesn't appear anywhere in the field definition
-      // so we can't affect it. Other side effects could happen similarly.
+      // For example, text fields store cached filtered values as 'safe_value'
+      // which does not appear anywhere in the field definition so we cannot
+      // affect it. Other side effects could happen similarly.
       $data = FALSE;
       foreach ($this->group_fields as $field_name => $column) {
-        if (property_exists($values, $this->aliases[$column])) {
-          $base_value[$field_name] = $values->{$this->aliases[$column]};
+        if (property_exists($row, $this->aliases[$column])) {
+          $base_value[$field_name] = $row->{$this->aliases[$column]};
           if (isset($base_value[$field_name])) {
             $data = TRUE;
           }
@@ -790,62 +891,6 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
       else {
         $processed_entity->{$this->definition['field_name']} = array();
       }
-    }
-
-    // The field we are trying to display doesn't exist on this entity.
-    if (!isset($processed_entity->{$this->definition['field_name']})) {
-      return FALSE;
-    }
-
-    // We are supposed to show only certain deltas.
-    if ($this->limit_values && !empty($processed_entity->{$this->definition['field_name']})) {
-      $all_values = !empty($processed_entity->{$this->definition['field_name']}) ? $processed_entity->{$this->definition['field_name']}->getValue() : array();
-      if ($this->options['delta_reversed']) {
-        $all_values = array_reverse($all_values);
-      }
-
-      // Offset is calculated differently when row grouping for a field is
-      // not enabled. Since there are multiple rows, the delta needs to be
-      // taken into account, so that different values are shown per row.
-      if (!$this->options['group_rows'] && isset($this->aliases['delta']) && isset($values->{$this->aliases['delta']})) {
-        $delta_limit = 1;
-        $offset = $values->{$this->aliases['delta']};
-      }
-      // Single fields don't have a delta available so choose 0.
-      elseif (!$this->options['group_rows'] && !$this->multiple) {
-        $delta_limit = 1;
-        $offset = 0;
-      }
-      else {
-        $delta_limit = $this->options['delta_limit'];
-        $offset = intval($this->options['delta_offset']);
-
-        // We should only get here in this case if there's an offset, and
-        // in that case we're limiting to all values after the offset.
-        if ($delta_limit == 'all') {
-          $delta_limit = count($all_values) - $offset;
-        }
-      }
-
-      // Determine if only the first and last values should be shown
-      $delta_first_last = $this->options['delta_first_last'];
-
-      $new_values = array();
-      for ($i = 0; $i < $delta_limit; $i++) {
-        $new_delta = $offset + $i;
-
-        if (isset($all_values[$new_delta])) {
-          // If first-last option was selected, only use the first and last values
-          if (!$delta_first_last
-            // Use the first value.
-            || $new_delta == $offset
-            // Use the last value.
-            || $new_delta == ($delta_limit + $offset - 1)) {
-            $new_values[] = $all_values[$new_delta];
-          }
-        }
-      }
-      $processed_entity->{$this->definition['field_name']} = $new_values;
     }
 
     return $processed_entity;
@@ -876,38 +921,12 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
                (is_object($item['raw']) ? (array)$item['raw'] : NULL);
       }
       if (isset($raw) && isset($raw[$id]) && is_scalar($raw[$id])) {
-        $tokens['{{ ' . $this->options['id'] . '-' . $id . ' }}'] = Xss::filterAdmin($raw[$id]);
+        $tokens['{{ ' . $this->options['id'] . '-' . $id . ' }}'] = CoreXss::filterAdmin($raw[$id]);
       }
       else {
         // Make sure that empty values are replaced as well.
         $tokens['{{ ' . $this->options['id'] . '-' . $id . ' }}'] = '';
       }
-    }
-  }
-
-  /**
-   * Return the language code of the language the field should be displayed in,
-   * according to the settings.
-   */
-  function field_langcode(EntityInterface $entity) {
-    if ($this->getFieldDefinition()->isTranslatable()) {
-      $langcode = $this->view->display_handler->options['field_langcode'];
-      $substitutions = static::queryLanguageSubstitutions();
-      if (isset($substitutions[$langcode])) {
-        $langcode = $substitutions[$langcode];
-      }
-
-      // Give the Entity Field API a chance to fallback to a different language
-      // (or LanguageInterface::LANGCODE_NOT_SPECIFIED), in case the field has
-      // no data for the selected language. FieldItemListInterface::view() does
-      // this as well, but since the returned language code is used before
-      // calling it, the fallback needs to happen explicitly.
-      $langcode = $this->entityManager->getTranslationFromContext($entity, $langcode)->language()->getId();
-
-      return $langcode;
-    }
-    else {
-      return LanguageInterface::LANGCODE_NOT_SPECIFIED;
     }
   }
 
@@ -940,12 +959,7 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
    * {@inheritdoc}
    */
   public function getCacheContexts() {
-    // @todo what to do about field access?
-    $contexts = [];
-
-    $contexts[] = 'cache.context.user';
-
-    return $contexts;
+    return $this->getEntityFieldRenderer()->getCacheContexts();
   }
 
   /**
@@ -962,11 +976,19 @@ class Field extends FieldPluginBase implements CacheablePluginInterface, MultiIt
    * {@inheritdoc}
    */
   public function getValue(ResultRow $values, $field = NULL) {
-    if ($field === NULL) {
-      return $this->getEntity($values)->{$this->definition['field_name']}->value;
+    /** @var \Drupal\Core\Field\FieldItemListInterface $field_item_list */
+    $field_item_list = $this->getEntity($values)->{$this->definition['field_name']};
+    $field_item_definition = $field_item_list->getFieldDefinition();
+
+    if ($field_item_definition->getFieldStorageDefinition()->getCardinality() == 1) {
+      return $field ? $field_item_list->$field : $field_item_list->value;
     }
 
-    return $this->getEntity($values)->{$this->definition['field_name']}->$field;
+    $values = [];
+    foreach ($field_item_list as $field_item) {
+      $values[] = $field ? $field_item->$field : $field_item->value;
+    }
+    return $values;
   }
 
 }

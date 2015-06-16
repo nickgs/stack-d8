@@ -12,10 +12,10 @@
   // Indicates whether the page should be reloaded after in-place editing has
   // shut down. A page reload is necessary to re-instate the original HTML of the
   // edited fields if in-place editing has been canceled and one or more of the
-  // entity's fields were saved to TempStore: one of them may have been changed to
-  // the empty value and hence may have been rerendered as the empty string, which
-  // makes it impossible for Quick Edit to know where to restore the original
-  // HTML.
+  // entity's fields were saved to PrivateTempStore: one of them may have been
+  // changed to the empty value and hence may have been rerendered as the empty
+  // string, which makes it impossible for Quick Edit to know where to restore
+  // the original HTML.
   var reload = false;
 
   Drupal.quickedit.AppView = Backbone.View.extend({
@@ -175,7 +175,8 @@
         // If it's not against the general principle, then here are more
         // disallowed cases to check.
         if (accept) {
-          var activeField, activeFieldState;
+          var activeField;
+          var activeFieldState;
           // Ensure only one field (editor) at a time is active … but allow a user
           // to hop from one field to the next, even if we still have to start
           // saving the field that is currently active: assume it will be valid,
@@ -188,7 +189,7 @@
               // Allow the state change. If the state of the active field is:
               // - 'activating' or 'active': change it to 'candidate'
               // - 'changed' or 'invalid': change it to 'saving'
-              // - 'saving'or 'saved': don't do anything.
+              // - 'saving' or 'saved': don't do anything.
               if (this.activeFieldStates.indexOf(activeFieldState) !== -1) {
                 activeField.set('state', 'candidate');
               }

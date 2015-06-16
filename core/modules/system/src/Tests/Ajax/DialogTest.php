@@ -7,6 +7,7 @@
 
 namespace Drupal\system\Tests\Ajax;
 
+use Drupal\Core\EventSubscriber\MainContentViewSubscriber;
 use Drupal\Core\Url;
 
 /**
@@ -32,7 +33,7 @@ class DialogTest extends AjaxTestBase {
     $this->drupalGet('ajax-test/dialog');
 
     // Set up variables for this test.
-    $dialog_renderable = ajax_test_dialog_contents();
+    $dialog_renderable = \Drupal\ajax_test\Controller\AjaxTestController::dialogContents();
     $dialog_contents = drupal_render($dialog_renderable);
     $modal_expected_response = array(
       'command' => 'openDialog',
@@ -93,7 +94,7 @@ class DialogTest extends AjaxTestBase {
     $this->assertRaw($dialog_contents, 'Non-JS modal dialog page present.');
 
     // Emulate going to the JS version of the page and check the JSON response.
-    $ajax_result = $this->drupalGetAJAX('ajax-test/dialog-contents', array(), array('Accept: application/vnd.drupal-modal'));
+    $ajax_result = $this->drupalGetAjax('ajax-test/dialog-contents', array('query' => array(MainContentViewSubscriber::WRAPPER_FORMAT => 'drupal_modal')));
     $this->assertEqual($modal_expected_response, $ajax_result[3], 'Modal dialog JSON response matches.');
 
     // Check that requesting a "normal" dialog without JS goes to a page.
@@ -106,7 +107,7 @@ class DialogTest extends AjaxTestBase {
     $ajax_result = $this->drupalPostAjaxForm('ajax-test/dialog', array(
         // We have to mock a form element to make drupalPost submit from a link.
         'textfield' => 'test',
-      ), array(), 'ajax-test/dialog-contents', array(), array('Accept: application/vnd.drupal-dialog'), NULL, array(
+      ), array(), 'ajax-test/dialog-contents', array('query' => array(MainContentViewSubscriber::WRAPPER_FORMAT => 'drupal_dialog')), array(), NULL, array(
       'submit' => array(
         'dialogOptions[target]' => 'ajax-test-dialog-wrapper-1',
       )
@@ -119,7 +120,7 @@ class DialogTest extends AjaxTestBase {
     $ajax_result = $this->drupalPostAjaxForm('ajax-test/dialog', array(
         // We have to mock a form element to make drupalPost submit from a link.
         'textfield' => 'test',
-      ), array(), 'ajax-test/dialog-contents', array(), array('Accept: application/vnd.drupal-dialog'), NULL, array(
+      ), array(), 'ajax-test/dialog-contents', array('query' => array(MainContentViewSubscriber::WRAPPER_FORMAT => 'drupal_dialog')), array(), NULL, array(
       // Don't send a target.
       'submit' => array()
     ));
@@ -127,7 +128,7 @@ class DialogTest extends AjaxTestBase {
 
     // Emulate closing the dialog via an AJAX request. There is no non-JS
     // version of this test.
-    $ajax_result = $this->drupalGetAJAX('ajax-test/dialog-close');
+    $ajax_result = $this->drupalGetAjax('ajax-test/dialog-close');
     $this->assertEqual($close_expected_response, $ajax_result[0], 'Close dialog JSON response matches.');
 
     // Test submitting via a POST request through the button for modals. This
@@ -159,13 +160,13 @@ class DialogTest extends AjaxTestBase {
     $this->assertTrue(!empty($form), 'Non-JS form page present.');
 
     // Emulate going to the JS version of the form and check the JSON response.
-    $ajax_result = $this->drupalGetAJAX('ajax-test/dialog-form', array(), array('Accept: application/vnd.drupal-modal'));
+    $ajax_result = $this->drupalGetAjax('ajax-test/dialog-form', array('query' => array(MainContentViewSubscriber::WRAPPER_FORMAT => 'drupal_modal')));
     $expected_ajax_settings = [
       'edit-preview' => [
         'callback' => '::preview',
         'event' => 'click',
         'url' => Url::fromRoute('system.ajax')->toString(),
-        'accepts' => 'application/vnd.drupal-ajax',
+        'dialogType' => 'ajax',
         'submit' => [
           '_triggering_element_name' => 'op',
           '_triggering_element_value' => 'Preview',
@@ -173,7 +174,7 @@ class DialogTest extends AjaxTestBase {
       ],
     ];
     $this->assertEqual($expected_ajax_settings, $ajax_result[0]['settings']['ajax']);
-    $this->drupalSetContent($ajax_result[3]['data']);
+    $this->setRawContent($ajax_result[3]['data']);
     // Remove the data, the form build id and token will never match.
     unset($ajax_result[3]['data']);
     $form = $this->xpath("//form[@id='ajax-test-form']");
@@ -188,8 +189,8 @@ class DialogTest extends AjaxTestBase {
     $this->assertTrue(!empty($form), 'Non-JS entity form page present.');
 
     // Emulate going to the JS version of the form and check the JSON response.
-    $ajax_result = $this->drupalGetAJAX('admin/structure/contact/add', array(), array('Accept: application/vnd.drupal-modal'));
-    $this->drupalSetContent($ajax_result[3]['data']);
+    $ajax_result = $this->drupalGetAjax('admin/structure/contact/add', array('query' => array(MainContentViewSubscriber::WRAPPER_FORMAT => 'drupal_modal')));
+    $this->setRawContent($ajax_result[3]['data']);
     // Remove the data, the form build id and token will never match.
     unset($ajax_result[3]['data']);
     $form = $this->xpath("//form[@id='contact-form-add-form']");

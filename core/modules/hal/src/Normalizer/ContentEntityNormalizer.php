@@ -76,7 +76,7 @@ class ContentEntityNormalizer extends NormalizerBase {
           'href' => $this->getEntityUri($entity),
         ),
         'type' => array(
-          'href' => $this->linkManager->getTypeUri($entity->getEntityTypeId(), $entity->bundle()),
+          'href' => $this->linkManager->getTypeUri($entity->getEntityTypeId(), $entity->bundle(), $context),
         ),
       ),
     );
@@ -132,7 +132,7 @@ class ContentEntityNormalizer extends NormalizerBase {
     }
 
     // Create the entity.
-    $typed_data_ids = $this->getTypedDataIds($data['_links']['type']);
+    $typed_data_ids = $this->getTypedDataIds($data['_links']['type'], $context);
     $entity_type = $this->entityManager->getDefinition($typed_data_ids['entity_type']);
     $langcode_key = $entity_type->getKey('langcode');
     $values = array();
@@ -171,29 +171,22 @@ class ContentEntityNormalizer extends NormalizerBase {
       }
     }
 
-    // Special handling for PATCH: pass the names of the fields whose values
-    // should be merged.
-    if (isset($context['request_method']) && $context['request_method'] == 'patch') {
-      $entity->_restPatchFields = array_keys($data);
-    }
+    // Pass the names of the fields whose values can be merged.
+    $entity->_restSubmittedFields = array_keys($data);
 
     // Iterate through remaining items in data array. These should all
     // correspond to fields.
     foreach ($data as $field_name => $field_data) {
+      $items = $entity->get($field_name);
       // Remove any values that were set as a part of entity creation (e.g
-      // uuid). If this field is set to an empty array in the data, this will
-      // also have the effect of marking the field for deletion in REST module.
-      $entity->{$field_name} = array();
-
-      $field = $entity->get($field_name);
-      // Get the class of the field. This will generally be the default Field
-      // class.
-      $field_class = get_class($field);
-      // Pass in the empty field object as a target instance. Since the context
-      // is already prepared for the field, any data added to it is
-      // automatically added to the entity.
-      $context['target_instance'] = $field;
-      $this->serializer->denormalize($field_data, $field_class, $format, $context);
+      // uuid). If the incoming field data is set to an empty array, this will
+      // also have the effect of emptying the field in REST module.
+      $items->setValue(array());
+      if ($field_data) {
+        // Denormalize the field data into the FieldItemList object.
+        $context['target_instance'] = $items;
+        $this->serializer->denormalize($field_data, get_class($items), $format, $context);
+      }
     }
 
     return $entity;
@@ -217,13 +210,14 @@ class ContentEntityNormalizer extends NormalizerBase {
    *
    * @param array $types
    *   The type array(s) (value of the 'type' attribute of the incoming data).
+   * @param array $context
+   *   Context from the normalizer/serializer operation.
    *
    * @return array
    *   The typed data IDs.
    *
-   * @throws \Symfony\Component\Serializer\Exception\UnexpectedValueException
    */
-  protected function getTypedDataIds($types) {
+  protected function getTypedDataIds($types, $context = array()) {
     // The 'type' can potentially contain an array of type objects. By default,
     // Drupal only uses a single type in serializing, but allows for multiple
     // types when deserializing.
@@ -238,7 +232,7 @@ class ContentEntityNormalizer extends NormalizerBase {
       $type_uri = $type['href'];
       // Check whether the URI corresponds to a known type on this site. Break
       // once one does.
-      if ($typed_data_ids = $this->linkManager->getTypeInternalIds($type['href'])) {
+      if ($typed_data_ids = $this->linkManager->getTypeInternalIds($type['href'], $context)) {
         break;
       }
     }

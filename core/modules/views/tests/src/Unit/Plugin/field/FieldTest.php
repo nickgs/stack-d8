@@ -7,9 +7,11 @@
 
 namespace Drupal\Tests\views\Unit\Plugin\field;
 
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Tests\UnitTestCase;
 use Drupal\Tests\views\Unit\Plugin\HandlerTestTrait;
 use Drupal\views\Plugin\views\field\Field;
+use Drupal\views\ResultRow;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 /**
@@ -56,6 +58,13 @@ class FieldTest extends UnitTestCase {
   protected $renderer;
 
   /**
+   * The container.
+   *
+   * @var \Drupal\Core\DependencyInjection\Container
+   */
+  protected $container;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp() {
@@ -83,9 +92,9 @@ class FieldTest extends UnitTestCase {
       ->disableOriginalConstructor()
       ->getMock();
 
-    $container = new ContainerBuilder();
-    $container->set('plugin.manager.field.field_type', $this->fieldTypePluginManager);
-    \Drupal::setContainer($container);
+    $this->container = new ContainerBuilder();
+    $this->container->set('plugin.manager.field.field_type', $this->fieldTypePluginManager);
+    \Drupal::setContainer($this->container);
   }
 
   /**
@@ -104,7 +113,7 @@ class FieldTest extends UnitTestCase {
   }
 
   /**
-   * @covers ::defineOptions()
+   * @covers ::defineOptions
    */
   public function testDefineOptionsWithNoOptions() {
     $definition = [
@@ -127,13 +136,41 @@ class FieldTest extends UnitTestCase {
     $handler->init($this->executable, $this->display, $options);
 
     $this->assertEquals('value', $handler->options['group_column']);
-    $this->assertEquals('all', $handler->options['delta_limit']);
+    $this->assertEquals(0, $handler->options['delta_limit']);
   }
 
   /**
-   * @covers ::defineOptions()
+   * @covers ::defineOptions
    */
-  public function testDefineOptionsWithDefaultFormatter() {
+  public function testDefineOptionsWithDefaultFormatterOnFieldDefinition() {
+    $definition = [
+      'entity_type' => 'test_entity',
+      'field_name' => 'title',
+      'default_formatter' => 'test_example',
+      'default_formatter_settings' => ['link_to_entity' => TRUE]
+    ];
+    $handler = new Field([], 'field', $definition, $this->entityManager, $this->formatterPluginManager, $this->fieldTypePluginManager, $this->languageManager, $this->renderer);
+
+    // Setup the entity manager to allow fetching the storage definitions.
+    $title_storage = $this->getBaseFieldStorage();
+
+    $this->entityManager->expects($this->atLeastOnce())
+      ->method('getFieldStorageDefinitions')
+      ->with('test_entity')
+      ->willReturn([
+        'title' => $title_storage,
+      ]);
+
+    $options = [];
+    $handler->init($this->executable, $this->display, $options);
+
+    $this->assertEquals('test_example', $handler->options['type']);
+  }
+
+  /**
+   * @covers ::defineOptions
+   */
+  public function testDefineOptionsWithDefaultFormatterOnFieldType() {
     $definition = [
       'entity_type' => 'test_entity',
       'field_name' => 'title',
@@ -158,7 +195,7 @@ class FieldTest extends UnitTestCase {
   }
 
   /**
-   * @covers ::calculateDependencies()
+   * @covers ::calculateDependencies
    */
   public function testCalculateDependenciesWithBaseField() {
     $definition = [
@@ -180,7 +217,7 @@ class FieldTest extends UnitTestCase {
   }
 
   /**
-   * @covers ::calculateDependencies()
+   * @covers ::calculateDependencies
    */
   public function testCalculateDependenciesWithConfiguredField() {
     $definition = [
@@ -206,7 +243,7 @@ class FieldTest extends UnitTestCase {
   }
 
   /**
-   * @covers ::access()
+   * @covers ::access
    */
   public function testAccess() {
     $definition = [
@@ -247,7 +284,7 @@ class FieldTest extends UnitTestCase {
 
     $access_control_handler->expects($this->atLeastOnce())
       ->method('fieldAccess')
-      ->with('view', $this->anything(), $account, NULL, FALSE)
+      ->with('view', $this->anything(), $account, NULL, $this->anything())
       ->willReturn(TRUE);
 
     $this->assertTrue($handler->access($account));
@@ -258,8 +295,6 @@ class FieldTest extends UnitTestCase {
    *
    * @param string $order
    *   The sort order.
-   *
-   * @covers ::clickSort
    */
   public function testClickSortWithOutConfiguredColumn($order) {
     $definition = [
@@ -405,6 +440,9 @@ class FieldTest extends UnitTestCase {
     ];
     $handler = new Field([], 'field', $definition, $this->entityManager, $this->formatterPluginManager, $this->fieldTypePluginManager, $this->languageManager, $this->renderer);
     $handler->view = $this->executable;
+    $handler->view->field = [$handler];
+
+    $this->setupLanguageRenderer($handler, $definition);
 
     $field_storage = $this->getBaseFieldStorage();
     $this->entityManager->expects($this->any())
@@ -464,6 +502,9 @@ class FieldTest extends UnitTestCase {
     ];
     $handler = new Field([], 'field', $definition, $this->entityManager, $this->formatterPluginManager, $this->fieldTypePluginManager, $this->languageManager, $this->renderer);
     $handler->view = $this->executable;
+    $handler->view->field = [$handler];
+
+    $this->setupLanguageRenderer($handler, $definition);
 
     $field_storage = $this->getConfigFieldStorage();
     $this->entityManager->expects($this->any())
@@ -511,6 +552,85 @@ class FieldTest extends UnitTestCase {
     $this->executable->query = $query;
 
     $handler->query(TRUE);
+  }
+
+  /**
+   * @covers ::prepareItemsByDelta
+   *
+   * @dataProvider providerTestPrepareItemsByDelta
+   */
+  public function testPrepareItemsByDelta(array $options, array $expected_values) {
+    $definition = [
+      'entity_type' => 'test_entity',
+      'field_name' => 'integer',
+    ];
+    $handler = new FieldTestField([], 'field', $definition, $this->entityManager, $this->formatterPluginManager, $this->fieldTypePluginManager, $this->languageManager, $this->renderer);
+    $handler->view = $this->executable;
+    $handler->view->field = [$handler];
+
+    $this->setupLanguageRenderer($handler, $definition);
+
+    $field_storage = $this->getConfigFieldStorage();
+    $field_storage->expects($this->any())
+      ->method('getCardinality')
+      ->willReturn(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+
+    $this->entityManager->expects($this->any())
+      ->method('getFieldStorageDefinitions')
+      ->with('test_entity')
+      ->willReturn([
+        'integer' => $field_storage,
+      ]);
+
+    $table_mapping = $this->getMock('Drupal\Core\Entity\Sql\TableMappingInterface');
+    $table_mapping
+      ->expects($this->any())
+      ->method('getFieldColumnName')
+      ->with($field_storage, 'value')
+      ->willReturn('integer_value');
+    $entity_storage = $this->getMock('Drupal\Core\Entity\Sql\SqlEntityStorageInterface');
+    $entity_storage->expects($this->any())
+      ->method('getTableMapping')
+      ->willReturn($table_mapping);
+    $this->entityManager->expects($this->any())
+      ->method('getStorage')
+      ->with('test_entity')
+      ->willReturn($entity_storage);
+
+    $options = [
+      'group_column' => 'value',
+      'group_columns' => [],
+      'table' => 'test_entity__integer',
+    ] + $options;
+    $handler->init($this->executable, $this->display, $options);
+
+    $this->executable->row_index = 0;
+    $this->executable->result = [0 => new ResultRow([])];
+
+    $items = [3, 1, 4, 1, 5, 9];
+    $this->assertEquals($expected_values, $handler->executePrepareItemsByDelta($items));
+  }
+
+  /**
+   * Provides test data for testPrepareItemsByDelta().
+   */
+  public function providerTestPrepareItemsByDelta() {
+    $data = [];
+
+    // Let's display all values.
+    $data[] = [[], [3, 1, 4, 1, 5, 9]];
+    // Test just reversed deltas.
+    $data[] = [['delta_reversed' => TRUE], [9, 5, 1, 4, 1, 3]];
+
+    // Test combinations of delta limit, offset and first_last.
+    $data[] = [['group_rows' => TRUE, 'delta_limit' => 3], [3, 1, 4]];
+    $data[] = [['group_rows' => TRUE, 'delta_limit' => 3, 'delta_offset' => 2], [4, 1, 5]];
+    $data[] = [['group_rows' => TRUE, 'delta_reversed' => TRUE, 'delta_limit' => 3, 'delta_offset' => 2], [1, 4, 1]];
+    $data[] = [['group_rows' => TRUE, 'delta_first_last' => TRUE], [3, 9]];
+    $data[] = [['group_rows' => TRUE, 'delta_limit' => 1, 'delta_first_last' => TRUE], [3]];
+    $data[] = [['group_rows' => TRUE, 'delta_offset' => 1, 'delta_first_last' => TRUE], [1, 9]];
+
+    return $data;
   }
 
   /**
@@ -563,6 +683,51 @@ class FieldTest extends UnitTestCase {
       ['ASC'],
       ['DESC'],
     ];
+  }
+
+  /**
+   * Setup the mock data needed to make language renderers work.
+   *
+   * @param \Drupal\views\Plugin\views\field\Field $handler
+   *   The field handler.
+   * @param $definition
+   *   An array with entity type definition data.
+   */
+  protected function setupLanguageRenderer(Field $handler, $definition) {
+    $display_handler = $this->getMockBuilder('\Drupal\views\Plugin\views\display\DisplayPluginBase')
+      ->disableOriginalConstructor()
+      ->getMock();
+    $display_handler->expects($this->any())
+      ->method('getOption')
+      ->with($this->equalTo('rendering_language'))
+      ->willReturn('en');
+    $handler->view->display_handler = $display_handler;
+
+    $data['table']['entity type'] = $definition['entity_type'];
+    $views_data = $this->getMockBuilder('\Drupal\views\ViewsData')
+      ->disableOriginalConstructor()
+      ->getMock();
+    $views_data->expects($this->any())
+      ->method('get')
+      ->willReturn($data);
+    $this->container->set('views.views_data', $views_data);
+
+    $entity_type = $this->getMock('\Drupal\Core\Entity\EntityTypeInterface');
+    $entity_type->expects($this->any())
+      ->method('id')
+      ->willReturn($definition['entity_type']);
+
+    $this->entityManager->expects($this->any())
+      ->method('getDefinition')
+      ->willReturn($entity_type);
+  }
+
+}
+
+class FieldTestField extends Field {
+
+  public function executePrepareItemsByDelta(array $all_values) {
+    return $this->prepareItemsByDelta($all_values);
   }
 
 }

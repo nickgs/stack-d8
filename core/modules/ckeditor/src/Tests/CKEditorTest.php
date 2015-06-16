@@ -266,10 +266,8 @@ class CKEditorTest extends KernelTestBase {
     \Drupal::service('theme_handler')->install(['bartik']);
     $this->config('system.theme')->set('default', 'bartik')->save();
     $expected[] = file_create_url('core/themes/bartik/css/base/elements.css');
-    $expected[] = file_create_url('core/themes/bartik/css/base/typography.css');
     $expected[] = file_create_url('core/themes/bartik/css/components/captions.css');
     $expected[] = file_create_url('core/themes/bartik/css/components/content.css');
-    $expected[] = file_create_url('core/themes/bartik/css/components/list.css');
     $expected[] = file_create_url('core/themes/bartik/css/components/table.css');
     $this->assertIdentical($expected, $this->ckeditor->buildContentsCssJSSetting($editor), '"contentsCss" configuration part of JS settings built correctly while a theme providing a CKEditor stylesheet exists.');
   }
@@ -285,14 +283,14 @@ class CKEditorTest extends KernelTestBase {
     $expected = $this->getDefaultInternalConfig();
     $expected['disallowedContent'] = $this->getDefaultDisallowedContentConfig();
     $expected['allowedContent'] = $this->getDefaultAllowedContentConfig();
-    $this->assertIdentical($expected, $internal_plugin->getConfig($editor), '"Internal" plugin configuration built correctly for default toolbar.');
+    $this->assertEqual($expected, $internal_plugin->getConfig($editor), '"Internal" plugin configuration built correctly for default toolbar.');
 
     // Format dropdown/button enabled: new setting should be present.
     $settings = $editor->getSettings();
     $settings['toolbar']['rows'][0][0]['items'][] = 'Format';
     $editor->setSettings($settings);
     $expected['format_tags'] = 'p;h4;h5;h6';
-    $this->assertIdentical($expected, $internal_plugin->getConfig($editor), '"Internal" plugin configuration built correctly for customized toolbar.');
+    $this->assertEqual($expected, $internal_plugin->getConfig($editor), '"Internal" plugin configuration built correctly for customized toolbar.');
   }
 
   /**
@@ -407,7 +405,7 @@ class CKEditorTest extends KernelTestBase {
   protected function assertCKEditorLanguage($langcode = 'fr') {
     // Set French as the site default language.
     ConfigurableLanguage::createFromLangcode('fr')->save();
-    $this->config('system.site')->set('langcode', 'fr')->save();
+    $this->config('system.site')->set('default_langcode', 'fr')->save();
 
     // Reset the language manager so new negotiations attempts will fall back on
     // French. Reinject the language manager CKEditor to use the current one.

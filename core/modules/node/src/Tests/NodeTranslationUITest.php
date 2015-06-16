@@ -8,16 +8,17 @@
 namespace Drupal\node\Tests;
 
 use Drupal\Core\Entity\EntityInterface;
-use Drupal\content_translation\Tests\ContentTranslationUITest;
+use Drupal\content_translation\Tests\ContentTranslationUITestBase;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Url;
+use Drupal\node\Entity\Node;
 
 /**
  * Tests the Node Translation UI.
  *
  * @group node
  */
-class NodeTranslationUITest extends ContentTranslationUITest {
+class NodeTranslationUITest extends ContentTranslationUITestBase {
 
   /**
    * Modules to enable.
@@ -49,7 +50,15 @@ class NodeTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getTranslatorPermission().
+   * Tests the basic translation UI.
+   */
+  function testTranslationUI() {
+    parent::testTranslationUI();
+    $this->doUninstallTest();
+  }
+
+  /**
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getTranslatorPermission().
    */
   protected function getTranslatorPermissions() {
     return array_merge(parent::getTranslatorPermissions(), array('administer nodes', "edit any $this->bundle content"));
@@ -70,7 +79,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getNewEntityValues().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getNewEntityValues().
    */
   protected function getNewEntityValues($langcode) {
     return array('title' => array(array('value' => $this->randomMachineName()))) + parent::getNewEntityValues($langcode);
@@ -89,7 +98,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::assertPublishedStatus().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::assertPublishedStatus().
    */
   protected function doTestPublishedStatus() {
     $entity = entity_load($this->entityTypeId, $this->entityId, TRUE);
@@ -120,7 +129,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::assertAuthoringInfo().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::assertAuthoringInfo().
    */
   protected function doTestAuthoringInfo() {
     $entity = entity_load($this->entityTypeId, $this->entityId, TRUE);
@@ -200,7 +209,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
     ));
 
     // Make sure that nothing was inserted into the {content_translation} table.
-    $rows = db_query('SELECT nid, count(nid) AS count FROM {node_field_data} WHERE type <> :type GROUP BY nid HAVING count >= 2', array(':type' => $this->bundle))->fetchAll();
+    $rows = db_query('SELECT nid, count(nid) AS count FROM {node_field_data} WHERE type <> :type GROUP BY nid HAVING count(nid) >= 2', array(':type' => $this->bundle))->fetchAll();
     $this->assertEqual(0, count($rows));
 
     // Ensure the translation tab is not accessible.
@@ -236,7 +245,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
     // Enable the translation language renderer.
     $view = \Drupal::entityManager()->getStorage('view')->load('frontpage');
     $display = &$view->getDisplay('default');
-    $display['display_options']['rendering_language'] = 'translation_language_renderer';
+    $display['display_options']['rendering_language'] = '***LANGUAGE_entity_translation***';
     $view->save();
 
     // Need to check from the beginning, including the base_path, in the url
@@ -331,7 +340,7 @@ class NodeTranslationUITest extends ContentTranslationUITest {
         // Retrieve desired link elements from the HTML head.
         $links = $this->xpath('head/link[@rel = "alternate" and @href = :href and @hreflang = :hreflang]',
           array(':href' => $language_url->toString(), ':hreflang' => $alternate_langcode));
-        $this->assert(isset($links[0]), format_string('The %langcode node translation has the correct alternate hreflang link for %alternate_langcode: %link.', array('%langcode' => $langcode, '%alternate_langcode' => $alternate_langcode, '%link' => $url)));
+        $this->assert(isset($links[0]), format_string('The %langcode node translation has the correct alternate hreflang link for %alternate_langcode: %link.', array('%langcode' => $langcode, '%alternate_langcode' => $alternate_langcode, '%link' => $url->toString())));
       }
     }
   }
@@ -348,4 +357,45 @@ class NodeTranslationUITest extends ContentTranslationUITest {
     }
     return '';
   }
+
+  /**
+   * Tests uninstalling content_translation.
+   */
+  protected function doUninstallTest() {
+    // Delete all the nodes so there is no data.
+    $nodes = Node::loadMultiple();
+    foreach ($nodes as $node) {
+      $node->delete();
+    }
+    $language_count = count(\Drupal::configFactory()->listAll('language.content_settings.'));
+    \Drupal::service('module_installer')->uninstall(['content_translation']);
+    $this->rebuildContainer();
+    $this->assertEqual($language_count, count(\Drupal::configFactory()->listAll('language.content_settings.')), 'Languages have been fixed rather than deleted during content_translation uninstall.');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function doTestTranslationEdit() {
+    $entity = entity_load($this->entityTypeId, $this->entityId, TRUE);
+    $languages = $this->container->get('language_manager')->getLanguages();
+    $type_name = node_get_type_label($entity);
+
+    foreach ($this->langcodes as $langcode) {
+      // We only want to test the title for non-english translations.
+      if ($langcode != 'en') {
+        $options = array('language' => $languages[$langcode]);
+        $url = $entity->urlInfo('edit-form', $options);
+        $this->drupalGet($url);
+
+        $title = t('<em>Edit @type</em> @title [%language translation]', array(
+          '@type' => $type_name,
+          '@title' => $entity->getTranslation($langcode)->label(),
+          '%language' => $languages[$langcode]->getName(),
+        ));
+        $this->assertRaw($title);
+      }
+    }
+  }
+
 }

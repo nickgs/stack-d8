@@ -208,7 +208,7 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
     if (!$current_user->hasPermission('translate any entity') && $permission_granularity = $entity_type->getPermissionGranularity()) {
       $translate_permission = $current_user->hasPermission($permission_granularity == 'bundle' ? "translate {$entity->bundle()} {$entity->getEntityTypeId()}" : "translate {$entity->getEntityTypeId()}");
     }
-    return AccessResult::allowedIf($translate_permission && $current_user->hasPermission("$op content translations"))->cachePerRole();
+    return AccessResult::allowedIf($translate_permission && $current_user->hasPermission("$op content translations"))->cachePerPermissions();
   }
 
   /**
@@ -246,8 +246,8 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
       $title = $this->entityFormTitle($entity);
       // When editing the original values display just the entity label.
       if ($form_langcode != $entity_langcode) {
-        $t_args = array('%language' => $languages[$form_langcode]->getName(), '%title' => $entity->label());
-        $title = empty($source_langcode) ? $title . ' [' . t('%language translation', $t_args) . ']' : t('Create %language translation of %title', $t_args);
+        $t_args = array('%language' => $languages[$form_langcode]->getName(), '%title' => $entity->label(), '!title' => $title);
+        $title = empty($source_langcode) ? t('!title [%language translation]', $t_args) : t('Create %language translation of %title', $t_args);
       }
       $form['#title'] = $title;
     }
@@ -319,12 +319,13 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
             break;
           }
         }
+        $access = $this->getTranslationAccess($entity, 'delete')->isAllowed() || ($entity->access('delete') && $this->entityType->hasLinkTemplate('delete-form'));
         $form['actions']['delete_translation'] = array(
           '#type' => 'submit',
           '#value' => t('Delete translation'),
           '#weight' => $weight,
           '#submit' => array(array($this, 'entityFormDeleteTranslation')),
-          '#access' => $this->getTranslationAccess($entity, 'delete')->isAllowed(),
+          '#access' => $access,
         );
       }
 
@@ -390,19 +391,21 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
       }
 
       // Default to the anonymous user.
-      $name = '';
+      $uid = 0;
       if ($new_translation) {
-        $name = \Drupal::currentUser()->getUsername();
+        $uid = \Drupal::currentUser()->getAccount()->id();
       }
       elseif (($account = $metadata->getAuthor()) && $account->id()) {
-        $name = $account->getUsername();
+        $uid = $account->id();
       }
-      $form['content_translation']['name'] = array(
-        '#type' => 'textfield',
+      $form['content_translation']['uid'] = array(
+        '#type' => 'entity_autocomplete',
         '#title' => t('Authored by'),
+        '#target_type' => 'user',
+        '#default_value' => User::load($uid),
+        // Validation is done by static::entityFormValidate().
+        '#validate_reference' => FALSE,
         '#maxlength' => 60,
-        '#autocomplete_route_name' => 'user.autocomplete',
-        '#default_value' => $name,
         '#description' => t('Leave blank for %anonymous.', array('%anonymous' => \Drupal::config('user.settings')->get('anonymous'))),
       );
 
@@ -530,12 +533,8 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
     $form_langcode = $form_object->getFormLangcode($form_state);
     $values = &$form_state->getValue('content_translation', array());
 
-    if ($values['name'] == \Drupal::config('user.settings')->get('anonymous')) {
-      $values['name'] = '';
-    }
-
     $metadata = $this->manager->getTranslationMetadata($entity);
-    $metadata->setAuthor(!empty($values['name']) && ($account = user_load_by_name($values['name'])) ? $account : User::load(0));
+    $metadata->setAuthor(!empty($values['uid']) ? User::load($values['uid']) : User::load(0));
     $metadata->setPublished(!empty($values['status']));
     $metadata->setCreatedTime(!empty($values['created']) ? strtotime($values['created']) : REQUEST_TIME);
     $metadata->setChangedTime(REQUEST_TIME);
@@ -560,8 +559,8 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
     if (!$form_state->isValueEmpty('content_translation')) {
       $translation = $form_state->getValue('content_translation');
       // Validate the "authored by" field.
-      if (!empty($translation['name']) && !($account = user_load_by_name($translation['name']))) {
-        $form_state->setErrorByName('content_translation][name', t('The translation authoring username %name does not exist.', array('%name' => $translation['name'])));
+      if (!empty($translation['uid']) && !($account = User::load($translation['uid']))) {
+        $form_state->setErrorByName('content_translation][uid', t('The translation authoring username %name does not exist.', array('%name' => $account->getUsername())));
       }
       // Validate the "authored on" field.
       if (!empty($translation['created']) && strtotime($translation['created']) === FALSE) {
@@ -609,13 +608,20 @@ class ContentTranslationHandler implements ContentTranslationHandlerInterface, E
    * Takes care of content translation deletion.
    */
   function entityFormDeleteTranslation($form, FormStateInterface $form_state) {
+    /** @var \Drupal\Core\Entity\ContentEntityFormInterface $form_object */
     $form_object = $form_state->getFormObject();
+    /** @var \Drupal\Core\Entity\ContentEntityInterface $entity */
     $entity = $form_object->getEntity();
     $entity_type_id = $entity->getEntityTypeId();
-    $form_state->setRedirect('content_translation.translation_delete_' . $entity_type_id, array(
-      $entity_type_id => $entity->id(),
-      'language' => $form_object->getFormLangcode($form_state),
-    ));
+    if ($entity->access('delete') && $this->entityType->hasLinkTemplate('delete-form')) {
+      $form_state->setRedirectUrl($entity->urlInfo('delete-form'));
+    }
+    else {
+      $form_state->setRedirect('content_translation.translation_delete_' . $entity_type_id, [
+        $entity_type_id => $entity->id(),
+        'language' => $form_object->getFormLangcode($form_state),
+      ]);
+    }
   }
 
   /**

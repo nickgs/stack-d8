@@ -7,7 +7,7 @@
 
 namespace Drupal\system\Tests\Mail;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Mail\MailFormatHelper;
 use Drupal\Core\Site\Settings;
@@ -34,7 +34,7 @@ class HtmlToTextTest extends WebTestBase {
       str_replace(
         array("\n", ' '),
         array('\n', '&nbsp;'),
-        String::checkPlain($text)
+        SafeMarkup::checkPlain($text)
       ) . '"';
   }
 
@@ -57,7 +57,7 @@ class HtmlToTextTest extends WebTestBase {
     $tested_tags = implode(', ', array_unique($matches[1]));
     $message .= ' (' . $tested_tags . ')';
     $result = MailFormatHelper::htmlToText($html, $allowed_tags);
-    $pass = $this->assertEqual($result, $text, String::checkPlain($message));
+    $pass = $this->assertEqual($result, $text, SafeMarkup::checkPlain($message));
     $verbose = 'html = <pre>' . $this->stringToHtml($html)
       . '</pre><br />' . 'result = <pre>' . $this->stringToHtml($result)
       . '</pre><br />' . 'expected = <pre>' . $this->stringToHtml($text)
@@ -75,7 +75,7 @@ class HtmlToTextTest extends WebTestBase {
     global $base_path, $base_url;
     $tests = array(
       // @todo Trailing linefeeds should be trimmed.
-      '<a href = "http://drupal.org">Drupal.org</a>' => "Drupal.org [1]\n\n[1] http://drupal.org\n",
+      '<a href = "https://www.drupal.org">Drupal.org</a>' => "Drupal.org [1]\n\n[1] https://www.drupal.org\n",
       // @todo Footer URLs should be absolute.
       "<a href = \"$base_path\">Homepage</a>" => "Homepage [1]\n\n[1] $base_url/\n",
       '<address>Drupal</address>' => "Drupal\n",
@@ -346,7 +346,7 @@ class HtmlToTextTest extends WebTestBase {
    * <CRLF> is 1000 characters."
    */
   public function testVeryLongLineWrap() {
-    $input = 'Drupal<br /><p>' . str_repeat('x', 2100) . '</><br />Drupal';
+    $input = 'Drupal<br /><p>' . str_repeat('x', 2100) . '</p><br />Drupal';
     $output = MailFormatHelper::htmlToText($input);
     $eol = Settings::get('mail_line_endings', PHP_EOL);
 
@@ -357,8 +357,7 @@ class HtmlToTextTest extends WebTestBase {
       $maximum_line_length = max($maximum_line_length, strlen($line . $eol));
     }
     $verbose = 'Maximum line length found was ' . $maximum_line_length . ' octets.';
-    // @todo This should assert that $maximum_line_length <= 1000.
-    $this->pass($verbose);
+    $this->assertTrue($maximum_line_length <= 1000, $verbose);
   }
 
   /**

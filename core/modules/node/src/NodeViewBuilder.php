@@ -11,6 +11,7 @@ use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityViewBuilder;
 use Drupal\node\Entity\Node;
+use Drupal\user\Entity\User;
 
 /**
  * Render controller for nodes.
@@ -25,9 +26,6 @@ class NodeViewBuilder extends EntityViewBuilder {
     if (empty($entities)) {
       return;
     }
-
-    // Attach user account.
-    user_attach_accounts($build, $entities);
 
     parent::buildComponents($build, $entities, $displays, $view_mode, $langcode);
 
@@ -149,7 +147,6 @@ class NodeViewBuilder extends EntityViewBuilder {
         )),
         'url' => $entity->urlInfo(),
         'language' => $entity->language(),
-        'html' => TRUE,
         'attributes' => array(
           'rel' => 'tag',
           'title' => $node_title_stripped,

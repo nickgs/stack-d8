@@ -8,14 +8,14 @@
 namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * User pictures migration.
  *
  * @group migrate_drupal
  */
-class MigrateUserPictureFileTest extends MigrateDrupalTestBase {
+class MigrateUserPictureFileTest extends MigrateDrupal6TestBase {
 
   /**
    * Modules to enable.
@@ -29,6 +29,9 @@ class MigrateUserPictureFileTest extends MigrateDrupalTestBase {
    */
   protected function setUp() {
     parent::setUp();
+
+    $this->installEntitySchema('file');
+
     $dumps = array(
       $this->getDumpDirectory() . '/Users.php',
       $this->getDumpDirectory() . '/ProfileValues.php',
@@ -56,14 +59,16 @@ class MigrateUserPictureFileTest extends MigrateDrupalTestBase {
     $files = entity_load_multiple('file', $file_ids);
     /** @var \Drupal\file\FileInterface $file */
     $file = array_shift($files);
-    $this->assertEqual($file->getFilename(), 'image-test.jpg');
-    $this->assertEqual($file->getFileUri(), 'public://image-test.jpg');
-    $this->assertEqual($file->getSize(), 1901);
-    $this->assertEqual($file->getMimeType(), 'image/jpeg');
+    $this->assertIdentical('image-test.jpg', $file->getFilename());
+    $this->assertIdentical('public://image-test.jpg', $file->getFileUri());
+    $this->assertIdentical('2', $file->getOwnerId());
+    $this->assertIdentical('1901', $file->getSize());
+    $this->assertIdentical('image/jpeg', $file->getMimeType());
 
     $file = array_shift($files);
-    $this->assertEqual($file->getFilename(), 'image-test.png');
-    $this->assertEqual($file->getFileUri(), 'public://image-test.png');
+    $this->assertIdentical('image-test.png', $file->getFilename());
+    $this->assertIdentical('public://image-test.png', $file->getFileUri());
+    $this->assertIdentical('8', $file->getOwnerId());
     $this->assertFalse($files);
   }
 

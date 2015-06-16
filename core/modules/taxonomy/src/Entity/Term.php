@@ -8,6 +8,7 @@
 namespace Drupal\taxonomy\Entity;
 
 use Drupal\Core\Entity\ContentEntityBase;
+use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
@@ -45,6 +46,7 @@ use Drupal\taxonomy\TermInterface;
  *   },
  *   bundle_entity_type = "taxonomy_vocabulary",
  *   field_ui_base_route = "entity.taxonomy_vocabulary.overview_form",
+ *   common_reference_target = TRUE,
  *   links = {
  *     "canonical" = "/taxonomy/term/{taxonomy_term}",
  *     "delete-form" = "/taxonomy/term/{taxonomy_term}/delete",
@@ -54,6 +56,8 @@ use Drupal\taxonomy\TermInterface;
  * )
  */
 class Term extends ContentEntityBase implements TermInterface {
+
+  use EntityChangedTrait;
 
   /**
    * {@inheritdoc}
@@ -121,6 +125,7 @@ class Term extends ContentEntityBase implements TermInterface {
     $fields['langcode'] = BaseFieldDefinition::create('language')
       ->setLabel(t('Language'))
       ->setDescription(t('The term language code.'))
+      ->setTranslatable(TRUE)
       ->setDisplayOptions('view', array(
         'type' => 'hidden',
       ))
@@ -176,7 +181,8 @@ class Term extends ContentEntityBase implements TermInterface {
 
     $fields['changed'] = BaseFieldDefinition::create('changed')
       ->setLabel(t('Changed'))
-      ->setDescription(t('The time that the term was last edited.'));
+      ->setDescription(t('The time that the term was last edited.'))
+      ->setTranslatable(TRUE);
 
     return $fields;
   }

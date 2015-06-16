@@ -33,7 +33,7 @@ class Node extends ArgumentDefaultPluginBase implements CacheablePluginInterface
   protected $routeMatch;
 
   /**
-   * Constructs a new Date instance.
+   * Constructs a new Node instance.
    *
    * @param array $configuration
    *   A configuration array containing information about the plugin instance.
@@ -83,7 +83,7 @@ class Node extends ArgumentDefaultPluginBase implements CacheablePluginInterface
    * {@inheritdoc}
    */
   public function getCacheContexts() {
-    return ['cache.context.url'];
+    return ['url'];
   }
 
 }

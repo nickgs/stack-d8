@@ -10,9 +10,8 @@
  * @{
  */
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Render\Element;
-use Drupal\Core\Template\Attribute;
 
 
 /**
@@ -23,8 +22,8 @@ use Drupal\Core\Template\Attribute;
  * @param array $variables
  *   An associative array containing:
  *   - element: A render element containing:
- *     - #link: A menu link array with 'title', 'href', and 'localized_options'
- *       keys.
+ *     - #link: A menu link array with 'title', 'url', and (optionally)
+ *       'localized_options' keys.
  *     - #active: A boolean indicating whether the local task is active.
  */
 function template_preprocess_menu_local_task(&$variables) {
@@ -35,18 +34,17 @@ function template_preprocess_menu_local_task(&$variables) {
   $link_text = $link['title'];
 
   if (!empty($variables['element']['#active'])) {
-    // Add text to indicate active tab for non-visual users.
-    $active = '<span class="visually-hidden">' . t('(active tab)') . '</span>';
-    $variables['attributes']['class'] = array('active');
+    $variables['is_active'] = TRUE;
 
-    // If the link does not contain HTML already, String::checkPlain() it now.
-    // After we set 'html'=TRUE the link will not be sanitized by l().
-    if (empty($link['localized_options']['html'])) {
-      $link['title'] = String::checkPlain($link['title']);
-    }
-    $link['localized_options']['html'] = TRUE;
-    $link_text = t('!local-task-title!active', array('!local-task-title' => $link['title'], '!active' => $active));
+    // Add text to indicate active tab for non-visual users.
+    $active = SafeMarkup::format('<span class="visually-hidden">@label</span>', array('@label' => t('(active tab)')));
+    $link_text = t('@local-task-title@active', array('@local-task-title' => $link_text, '@active' => $active));
   }
+  else {
+    // @todo Remove this once https://www.drupal.org/node/2338081 is fixed.
+    $link_text = SafeMarkup::checkPlain($link_text);
+  }
+
   $link['localized_options']['set_active_class'] = TRUE;
 
   $variables['link'] = array(
@@ -65,8 +63,8 @@ function template_preprocess_menu_local_task(&$variables) {
  * @param array $variables
  *   An associative array containing:
  *   - element: A render element containing:
- *     - #link: A menu link array with 'title', 'href', and 'localized_options'
- *       keys.
+ *     - #link: A menu link array with 'title', 'url', and (optionally)
+ *       'localized_options' keys.
  */
 function template_preprocess_menu_local_action(&$variables) {
   $link = $variables['element']['#link'];

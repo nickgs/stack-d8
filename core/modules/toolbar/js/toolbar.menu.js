@@ -2,7 +2,7 @@
  * Builds a nested accordion widget.
  *
  * Invoke on an HTML list element with the jQuery plugin pattern.
- * - For example, $('.menu').drupalToolbarMenu();
+ * - For example, $('.toolbar-menu').drupalToolbarMenu();
  */
 
 (function ($, Drupal, drupalSettings) {
@@ -103,7 +103,7 @@
       // Add a handle to each list item if it has a menu.
       $menu.find('li').each(function (index, element) {
         var $item = $(element);
-        if ($item.children('ul.menu').length) {
+        if ($item.children('ul.toolbar-menu').length) {
           var $box = $item.children('.toolbar-box');
           options.text = Drupal.t('@label', {'@label': $box.find('a').text()});
           $item.children('.toolbar-box')
@@ -137,7 +137,7 @@
      * On page load, open the active menu item.
      *
      * Marks the trail of the active link in the menu back to the root of the
-     * menu with .active-trail.
+     * menu with .menu-item--active-trail.
      *
      * @param {jQuery} $menu
      *   The root of the menu.
@@ -148,8 +148,8 @@
         activeItem = location.pathname;
       }
       if (activeItem) {
-        var $activeItem = $menu.find('a[href="' + activeItem + '"]').addClass('active');
-        var $activeTrail = $activeItem.parentsUntil('.root', 'li').addClass('active-trail');
+        var $activeItem = $menu.find('a[href="' + activeItem + '"]').addClass('menu-item--active');
+        var $activeTrail = $activeItem.parentsUntil('.root', 'li').addClass('menu-item--active-trail');
         toggleList($activeTrail, true);
       }
     }

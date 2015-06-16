@@ -25,7 +25,7 @@ use Drupal\Core\Session\AccountInterface;
  * - Content language: The language used to present content that is available
  *   in more than one language.
  * - URL language: The language associated with URLs. When generating a URL,
- *   this value will be used by _url() as a default if no explicit preference is
+ *   this value will be used for URL's as a default if no explicit preference is
  *   provided.
  * Modules can define additional language types through
  * hook_language_types_info(), and alter existing language type definitions
@@ -59,7 +59,7 @@ use Drupal\Core\Session\AccountInterface;
  * - URL: Determine the language from the URL (path prefix or domain).
  * - Session: Determine the language from a request/session parameter.
  * - User: Follow the user's language preference.
- * - User admin language: Identifie admin language from the user preferences.
+ * - User admin language: Identify admin language from the user preferences.
  * - Browser: Determine the language from the browser's language settings.
  * - Selected language: Use the default site language.
  * Language negotiation methods are simple plugin classes that implement a
@@ -100,7 +100,7 @@ use Drupal\Core\Session\AccountInterface;
  * @endcode
  *
  * For more information, see
- * @link http://drupal.org/node/1497272 Language Negotiation API @endlink
+ * @link https://www.drupal.org/node/1497272 Language Negotiation API @endlink
  */
 interface LanguageNegotiatorInterface {
 

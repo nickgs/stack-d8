@@ -19,7 +19,7 @@ interface ConditionInterface {
    *
    * This method can take a variable number of parameters. If called with two
    * parameters, they are taken as $field and $value with $operator having a
-   * value of IN if $value is an array and = otherwise.
+   * value of =.
    *
    * Do not use this method to test for NULL values. Instead, use
    * QueryConditionInterface::isNull() or QueryConditionInterface::isNotNull().
@@ -46,8 +46,7 @@ interface ConditionInterface {
    *   the array is dependent on the $operator.
    * @param $operator
    *   The comparison operator, such as =, <, or >=. It also accepts more
-   *   complex options such as IN, LIKE, LIKE BINARY, or BETWEEN. Defaults to IN
-   *   if $value is an array, and = otherwise.
+   *   complex options such as IN, LIKE, LIKE BINARY, or BETWEEN. Defaults to =.
    *
    * @return \Drupal\Core\Database\Query\ConditionInterface
    *   The called object.
@@ -55,7 +54,7 @@ interface ConditionInterface {
    * @see \Drupal\Core\Database\Query\ConditionInterface::isNull()
    * @see \Drupal\Core\Database\Query\ConditionInterface::isNotNull()
    */
-  public function condition($field, $value = NULL, $operator = NULL);
+  public function condition($field, $value = NULL, $operator = '=');
 
   /**
    * Adds an arbitrary WHERE clause to the query.

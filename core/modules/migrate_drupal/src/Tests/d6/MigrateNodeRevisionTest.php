@@ -55,22 +55,22 @@ class MigrateNodeRevisionTest extends MigrateNodeTestBase {
   public function testNodeRevision() {
     $node = \Drupal::entityManager()->getStorage('node')->loadRevision(2);
     /** @var \Drupal\node\NodeInterface $node */
-    $this->assertEqual($node->id(), 1);
-    $this->assertEqual($node->getRevisionId(), 2);
-    $this->assertEqual($node->langcode->value, 'und');
-    $this->assertEqual($node->getTitle(), 'Test title rev 2');
-    $this->assertEqual($node->body->value, 'body test rev 2');
-    $this->assertEqual($node->body->summary, 'teaser test rev 2');
-    $this->assertEqual($node->getRevisionAuthor()->id(), 2);
-    $this->assertEqual($node->revision_log->value, 'modified rev 2');
-    $this->assertEqual($node->getRevisionCreationTime(), '1390095702');
+    $this->assertIdentical('1', $node->id());
+    $this->assertIdentical('2', $node->getRevisionId());
+    $this->assertIdentical('und', $node->langcode->value);
+    $this->assertIdentical('Test title rev 2', $node->getTitle());
+    $this->assertIdentical('body test rev 2', $node->body->value);
+    $this->assertIdentical('teaser test rev 2', $node->body->summary);
+    $this->assertIdentical('2', $node->getRevisionAuthor()->id());
+    $this->assertIdentical('modified rev 2', $node->revision_log->value);
+    $this->assertIdentical('1390095702', $node->getRevisionCreationTime());
 
     $node = \Drupal::entityManager()->getStorage('node')->loadRevision(5);
-    $this->assertEqual($node->id(), 1);
-    $this->assertEqual($node->body->value, 'body test rev 3');
-    $this->assertEqual($node->getRevisionAuthor()->id(), 1);
-    $this->assertEqual($node->revision_log->value, 'modified rev 3');
-    $this->assertEqual($node->getRevisionCreationTime(), '1390095703');
+    $this->assertIdentical('1', $node->id());
+    $this->assertIdentical('body test rev 3', $node->body->value);
+    $this->assertIdentical('1', $node->getRevisionAuthor()->id());
+    $this->assertIdentical('modified rev 3', $node->revision_log->value);
+    $this->assertIdentical('1390095703', $node->getRevisionCreationTime());
   }
 
 }

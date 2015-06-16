@@ -458,7 +458,7 @@ class Page extends PathPluginBase {
     return array(
       'filter value not present' => $this->t('When the filter value is <em>NOT</em> in the URL'),
       'filter value present' => $this->t('When the filter value <em>IS</em> in the URL or a default is provided'),
-      'description' => $this->t('The contextual filter values is provided by the URL.'),
+      'description' => $this->t('The contextual filter values are provided by the URL.'),
     );
   }
 
@@ -479,8 +479,7 @@ class Page extends PathPluginBase {
     $dependencies = parent::calculateDependencies();
 
     $menu = $this->getOption('menu');
-    if ($menu['type'] === 'normal') {
-      $menu_entity = $this->menuStorage->load($menu['menu_name']);
+    if ($menu['type'] === 'normal' && ($menu_entity = $this->menuStorage->load($menu['menu_name']))) {
       $dependencies[$menu_entity->getConfigDependencyKey()][] = $menu_entity->getConfigDependencyName();
     }
 

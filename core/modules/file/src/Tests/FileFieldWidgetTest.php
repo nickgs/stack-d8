@@ -8,9 +8,11 @@
 namespace Drupal\file\Tests;
 
 use Drupal\comment\Entity\Comment;
+use Drupal\comment\Tests\CommentTestTrait;
 use Drupal\Component\Utility\Html;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field_ui\Tests\FieldUiTestTrait;
+use Drupal\user\RoleInterface;
 
 /**
  * Tests the file field widget, single and multi-valued, with and without AJAX,
@@ -20,14 +22,23 @@ use Drupal\field_ui\Tests\FieldUiTestTrait;
  */
 class FileFieldWidgetTest extends FileFieldTestBase {
 
+  use CommentTestTrait;
   use FieldUiTestTrait;
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function setUp() {
+    parent::setUp();
+    $this->drupalPlaceBlock('system_breadcrumb_block');
+  }
 
   /**
    * Modules to enable.
    *
    * @var array
    */
-  public static $modules = array('comment');
+  public static $modules = array('comment', 'block');
 
   /**
    * Tests upload and remove buttons for a single-valued File field.
@@ -211,18 +222,19 @@ class FileFieldWidgetTest extends FileFieldTestBase {
   function testPrivateFileSetting() {
     $node_storage = $this->container->get('entity.manager')->getStorage('node');
     // Grant the admin user required permissions.
-    user_role_grant_permissions($this->admin_user->roles[0]->target_id, array('administer node fields'));
+    user_role_grant_permissions($this->adminUser->roles[0]->target_id, array('administer node fields'));
 
     $type_name = 'article';
     $field_name = strtolower($this->randomMachineName());
     $this->createFileField($field_name, 'node', $type_name);
     $field = FieldConfig::loadByName('node', $type_name, $field_name);
+    $field_id = $field->id();
 
     $test_file = $this->getTestFile('text');
 
     // Change the field setting to make its files private, and upload a file.
-    $edit = array('field_storage[settings][uri_scheme]' => 'private');
-    $this->drupalPostForm("admin/structure/types/manage/$type_name/fields/$field->id/storage", $edit, t('Save field settings'));
+    $edit = array('settings[uri_scheme]' => 'private');
+    $this->drupalPostForm("admin/structure/types/manage/$type_name/fields/$field_id/storage", $edit, t('Save field settings'));
     $nid = $this->uploadNodeFile($test_file, $field_name, $type_name);
     $node_storage->resetCache(array($nid));
     $node = $node_storage->load($nid);
@@ -235,13 +247,13 @@ class FileFieldWidgetTest extends FileFieldTestBase {
 
     // Ensure we can't change 'uri_scheme' field settings while there are some
     // entities with uploaded files.
-    $this->drupalGet("admin/structure/types/manage/$type_name/fields/$field->id/storage");
-    $this->assertFieldByXpath('//input[@id="edit-field-storage-settings-uri-scheme-public" and @disabled="disabled"]', 'public', 'Upload destination setting disabled.');
+    $this->drupalGet("admin/structure/types/manage/$type_name/fields/$field_id/storage");
+    $this->assertFieldByXpath('//input[@id="edit-settings-uri-scheme-public" and @disabled="disabled"]', 'public', 'Upload destination setting disabled.');
 
     // Delete node and confirm that setting could be changed.
     $node->delete();
-    $this->drupalGet("admin/structure/types/manage/$type_name/fields/$field->id/storage");
-    $this->assertFieldByXpath('//input[@id="edit-field-storage-settings-uri-scheme-public" and not(@disabled)]', 'public', 'Upload destination setting enabled.');
+    $this->drupalGet("admin/structure/types/manage/$type_name/fields/$field_id/storage");
+    $this->assertFieldByXpath('//input[@id="edit-settings-uri-scheme-public" and not(@disabled)]', 'public', 'Upload destination setting enabled.');
   }
 
   /**
@@ -251,20 +263,20 @@ class FileFieldWidgetTest extends FileFieldTestBase {
     $user = $this->drupalCreateUser(array('access comments'));
 
     // Grant the admin user required comment permissions.
-    $roles = $this->admin_user->getRoles();
+    $roles = $this->adminUser->getRoles();
     user_role_grant_permissions($roles[1], array('administer comment fields', 'administer comments'));
 
     // Revoke access comments permission from anon user, grant post to
     // authenticated.
-    user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('access comments'));
-    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('post comments', 'skip comment approval'));
+    user_role_revoke_permissions(RoleInterface::ANONYMOUS_ID, array('access comments'));
+    user_role_grant_permissions(RoleInterface::AUTHENTICATED_ID, array('post comments', 'skip comment approval'));
 
     // Create a new field.
-    $this->container->get('comment.manager')->addDefaultField('node', 'article');
+    $this->addDefaultCommentField('node', 'article');
 
     $name = strtolower($this->randomMachineName());
     $label = $this->randomMachineName();
-    $storage_edit = array('field_storage[settings][uri_scheme]' => 'private');
+    $storage_edit = array('settings[uri_scheme]' => 'private');
     $this->fieldUIAddNewField('admin/structure/comment/manage/comment', $name, $label, 'file', $storage_edit);
 
     // Manually clear cache on the tester side.
@@ -307,7 +319,7 @@ class FileFieldWidgetTest extends FileFieldTestBase {
     $this->assertResponse(403, 'Confirmed that access is denied for the file without the needed permission.');
 
     // Unpublishes node.
-    $this->drupalLogin($this->admin_user);
+    $this->drupalLogin($this->adminUser);
     $this->drupalPostForm('node/' . $node->id() . '/edit', array(), t('Save and unpublish'));
 
     // Ensures normal user can no longer download the file.

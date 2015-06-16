@@ -9,7 +9,7 @@ label: 'Test language'
 module: views
 description: ''
 tag: ''
-base_table: node
+base_table: node_field_data
 base_field: nid
 core: 8.x
 display:
@@ -32,7 +32,7 @@ display:
           disable_sql_rewrite: false
           distinct: false
           replica: false
-          query_comment: false
+          query_comment: ''
           query_tags: {  }
       exposed_form:
         type: basic
@@ -85,7 +85,7 @@ display:
             suffix: ''
             target: ''
             nl2br: false
-            max_length: ''
+            max_length: 0
             word_boundary: false
             ellipsis: false
             more_link: false
@@ -107,8 +107,7 @@ display:
           hide_empty: false
           empty_zero: false
           hide_alter_empty: true
-          link_to_node: false
-          plugin_id: node
+          plugin_id: field
           entity_type: node
           entity_field: title
         langcode:
@@ -137,7 +136,7 @@ display:
             suffix: ''
             target: ''
             nl2br: false
-            max_length: ''
+            max_length: 0
             word_boundary: true
             ellipsis: true
             more_link: false
@@ -159,11 +158,12 @@ display:
           hide_empty: false
           empty_zero: false
           hide_alter_empty: true
-          link_to_node: false
-          native_language: false
-          plugin_id: node_language
+          plugin_id: field
           entity_type: node
           entity_field: langcode
+          settings:
+            native_language: false
+          type: language
       filters:
         status:
           value: true
@@ -282,14 +282,10 @@ display:
           plugin_id: language
           entity_type: node
           entity_field: langcode
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
   page_1:
     display_plugin: page
     id: page_1
     display_title: Page
     position: 1
     display_options:
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
       path: test-language

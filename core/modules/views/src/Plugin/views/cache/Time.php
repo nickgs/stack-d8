@@ -9,9 +9,11 @@ namespace Drupal\views\Plugin\views\cache;
 
 use Drupal\Core\Datetime\DateFormatter;
 use Drupal\Core\Cache\Cache;
+use Drupal\Core\Render\RenderCacheInterface;
 use Drupal\Core\Render\RendererInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Simple caching of query results for Views displays.
@@ -39,6 +41,13 @@ class Time extends CachePluginBase {
   protected $dateFormatter;
 
   /**
+   * The current request.
+   *
+   * @var \Symfony\Component\HttpFoundation\Request
+   */
+  protected $request;
+
+  /**
    * Constructs a Time cache plugin object.
    *
    * @param array $configuration
@@ -48,13 +57,19 @@ class Time extends CachePluginBase {
    * @param mixed $plugin_definition
    *   The plugin implementation definition.
    * @param \Drupal\Core\Render\RendererInterface $renderer
-   *   The renderer service.
+   *   The HTML renderer.
    * @param \Drupal\Core\Datetime\DateFormatter $date_formatter
    *   The date formatter service.
+   * @param \Drupal\Core\Render\RenderCacheInterface $render_cache
+   *   The render cache service.
+   * @param \Symfony\Component\HttpFoundation\Request $request
+   *   The current request.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, RendererInterface $renderer, DateFormatter $date_formatter) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, RendererInterface $renderer, RenderCacheInterface $render_cache, DateFormatter $date_formatter, Request $request) {
     $this->dateFormatter = $date_formatter;
-    parent::__construct($configuration, $plugin_id, $plugin_definition, $renderer);
+    $this->request = $request;
+
+    parent::__construct($configuration, $plugin_id, $plugin_definition, $renderer, $render_cache);
   }
 
   /**
@@ -66,7 +81,9 @@ class Time extends CachePluginBase {
       $plugin_id,
       $plugin_definition,
       $container->get('renderer'),
-      $container->get('date.formatter')
+      $container->get('render_cache'),
+      $container->get('date.formatter'),
+      $container->get('request_stack')->getCurrentRequest()
     );
   }
 
@@ -168,6 +185,15 @@ class Time extends CachePluginBase {
     else {
       return Cache::PERMANENT;
     }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function getDefaultCacheMaxAge() {
+    // The max age, unless overridden by some other piece of the rendered code
+    // is determined by the output time setting.
+    return $this->cacheSetExpire('output');
   }
 
 }

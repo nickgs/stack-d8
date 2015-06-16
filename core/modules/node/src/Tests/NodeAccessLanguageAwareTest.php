@@ -9,6 +9,7 @@ namespace Drupal\node\Tests;
 
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
+use Drupal\user\Entity\User;
 
 /**
  * Tests node_access and db_select() with node_access tag functionality with
@@ -56,10 +57,6 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'entity_type' => 'node',
       'type' => 'boolean',
       'cardinality' => 1,
-      'settings' => array(
-        'on_label' => 'Private',
-        'off_label' => 'Not private',
-      ),
     ));
     $field_storage->save();
 
@@ -68,6 +65,10 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'bundle' => 'page',
       'widget' => array(
         'type' => 'options_buttons',
+      ),
+      'settings' => array(
+        'on_label' => 'Private',
+        'off_label' => 'Not private',
       ),
     ))->save();
 
@@ -79,7 +80,7 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
 
     // Load the user 1 user for later use as an admin user with permission to
     // see everything.
-    $this->adminUser = user_load(1);
+    $this->adminUser = User::load(1);
 
     // Add Hungarian and Catalan.
     ConfigurableLanguage::createFromLangcode('hu')->save();
@@ -103,7 +104,7 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'field_private' => array(array('value' => 0)),
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 0;
+    $translation->field_private->value = 0;
     $node->save();
 
     $this->nodes['ca_private'] = $node = $this->drupalCreateNode(array(
@@ -112,7 +113,7 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'field_private' => array(array('value' => 0)),
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 1;
+    $translation->field_private->value = 1;
     $node->save();
 
     $this->nodes['hu_private'] = $node = $this->drupalCreateNode(array(
@@ -121,7 +122,7 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'field_private' => array(array('value' => 1)),
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 0;
+    $translation->field_private->value = 0;
     $node->save();
 
     $this->nodes['both_private'] = $node = $this->drupalCreateNode(array(
@@ -130,7 +131,7 @@ class NodeAccessLanguageAwareTest extends NodeTestBase {
       'field_private' => array(array('value' => 1)),
     ));
     $translation = $node->getTranslation('ca');
-    $translation->field_private[0]->value = 1;
+    $translation->field_private->value = 1;
     $node->save();
 
     $this->nodes['no_language_public'] = $this->drupalCreateNode(array(

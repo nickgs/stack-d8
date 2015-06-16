@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -13,7 +13,7 @@ label: test_plugin_dependencies
 module: views
 description: ''
 tag: default
-base_table: comment
+base_table: comment_field_data
 base_field: nid
 core: 8.0-dev
 display:
@@ -29,7 +29,7 @@ display:
         cid:
           field: cid
           id: cid
-          table: comment
+          table: comment_field_data
           plugin_id: comment
           entity_type: comment
           entity_field: cid
@@ -47,8 +47,6 @@ display:
         type: test_style
       row:
         type: test_row
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default

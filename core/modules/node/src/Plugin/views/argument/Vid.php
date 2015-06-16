@@ -7,9 +7,9 @@
 
 namespace Drupal\node\Plugin\views\argument;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Database\Connection;
-use Drupal\views\Plugin\views\argument\Numeric;
+use Drupal\views\Plugin\views\argument\NumericArgument;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\node\NodeStorageInterface;
 
@@ -18,7 +18,7 @@ use Drupal\node\NodeStorageInterface;
  *
  * @ViewsArgument("node_vid")
  */
-class Vid extends Numeric {
+class Vid extends NumericArgument {
 
   /**
    * Database Service Object.
@@ -74,7 +74,7 @@ class Vid extends Numeric {
   public function titleQuery() {
     $titles = array();
 
-    $results = $this->database->query('SELECT nr.vid, nr.nid, npr.title FROM {node_revision} nr WHERE nr.vid IN (:vids)', array(':vids' => $this->value))->fetchAllAssoc('vid', PDO::FETCH_ASSOC);
+    $results = $this->database->query('SELECT nr.vid, nr.nid, npr.title FROM {node_revision} nr WHERE nr.vid IN ( :vids[] )', array(':vids[]' => $this->value))->fetchAllAssoc('vid', PDO::FETCH_ASSOC);
     $nids = array();
     foreach ($results as $result) {
       $nids[] = $result['nid'];
@@ -84,7 +84,7 @@ class Vid extends Numeric {
 
     foreach ($results as $result) {
       $nodes[$result['nid']]->set('title', $result['title']);
-      $titles[] = String::checkPlain($nodes[$result['nid']]->label());
+      $titles[] = SafeMarkup::checkPlain($nodes[$result['nid']]->label());
     }
 
     return $titles;

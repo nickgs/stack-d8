@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Contains \Drupal\entity\Tests\ContentTranslationSyncImageTest.
+ * Contains \Drupal\content_translation\Tests\ContentTranslationSyncImageTest.
  */
 
 namespace Drupal\content_translation\Tests;
@@ -88,11 +88,11 @@ class ContentTranslationSyncImageTest extends ContentTranslationTestBase {
     // Check that the alt and title fields are enabled for the image field.
     $this->drupalLogin($this->editor);
     $this->drupalGet('entity_test_mul/structure/' . $this->entityTypeId . '/fields/' . $this->entityTypeId . '.' . $this->entityTypeId . '.' . $this->fieldName);
-    $this->assertFieldChecked('edit-field-third-party-settings-content-translation-translation-sync-alt');
-    $this->assertFieldChecked('edit-field-third-party-settings-content-translation-translation-sync-title');
+    $this->assertFieldChecked('edit-third-party-settings-content-translation-translation-sync-alt');
+    $this->assertFieldChecked('edit-third-party-settings-content-translation-translation-sync-title');
     $edit = array(
-      'field[third_party_settings][content_translation][translation_sync][alt]' => FALSE,
-      'field[third_party_settings][content_translation][translation_sync][title]' => FALSE,
+      'third_party_settings[content_translation][translation_sync][alt]' => FALSE,
+      'third_party_settings[content_translation][translation_sync][title]' => FALSE,
     );
     $this->drupalPostForm(NULL, $edit, t('Save settings'));
 
@@ -149,7 +149,7 @@ class ContentTranslationSyncImageTest extends ContentTranslationTestBase {
         'alt' => $default_langcode . '_' . $fid . '_' . $this->randomMachineName(),
         'title' => $default_langcode . '_' . $fid . '_' . $this->randomMachineName(),
       );
-      $entity->{$this->fieldName}->get($delta)->setValue($item);
+      $entity->{$this->fieldName}[] = $item;
 
       // Store the generated values keying them by fid for easier lookup.
       $values[$default_langcode][$fid] = $item;
@@ -175,7 +175,7 @@ class ContentTranslationSyncImageTest extends ContentTranslationTestBase {
         'alt' => $langcode . '_' . $fid . '_' . $this->randomMachineName(),
         'title' => $langcode . '_' . $fid . '_' . $this->randomMachineName(),
       );
-      $translation->{$this->fieldName}->get($delta)->setValue($item);
+      $translation->{$this->fieldName}[] = $item;
 
       // Again store the generated values keying them by fid for easier lookup.
       $values[$langcode][$fid] = $item;

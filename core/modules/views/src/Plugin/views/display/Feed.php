@@ -7,7 +7,7 @@
 
 namespace Drupal\views\Plugin\views\display;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\views\ViewExecutable;
 use Drupal\views\Views;
@@ -95,7 +95,7 @@ class Feed extends PathPluginBase {
     if (!empty($this->view->live_preview)) {
       $output = array(
         '#prefix' => '<pre>',
-        '#markup' => String::checkPlain(drupal_render_root($output)),
+        '#markup' => SafeMarkup::checkPlain(drupal_render_root($output)),
         '#suffix' => '</pre>',
       );
     }
@@ -177,7 +177,7 @@ class Feed extends PathPluginBase {
       $display = array_shift($displays);
       $displays = $this->view->storage->get('display');
       if (!empty($displays[$display])) {
-        $attach_to = String::checkPlain($displays[$display]['display_title']);
+        $attach_to = SafeMarkup::checkPlain($displays[$display]['display_title']);
       }
     }
 
@@ -265,10 +265,11 @@ class Feed extends PathPluginBase {
 
     // Defer to the feed style; it may put in meta information, and/or
     // attach a feed icon.
+    $clone->setArguments($this->view->args);
     $clone->setDisplay($this->display['id']);
     $clone->buildTitle();
     if ($plugin = $clone->display_handler->getPlugin('style')) {
-      $plugin->attachTo($build, $display_id, $this->getPath(), $clone->getTitle());
+      $plugin->attachTo($build, $display_id, $clone->getUrl(), $clone->getTitle());
       foreach ($clone->feedIcons as $feed_icon) {
         $this->view->feedIcons[] = $feed_icon;
       }

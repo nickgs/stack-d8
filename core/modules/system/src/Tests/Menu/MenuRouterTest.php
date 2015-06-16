@@ -7,6 +7,7 @@
 
 namespace Drupal\system\Tests\Menu;
 
+use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -21,21 +22,21 @@ class MenuRouterTest extends WebTestBase {
    *
    * @var array
    */
-  public static $modules = array('block', 'menu_test', 'test_page_test');
+  public static $modules = ['block', 'menu_test', 'test_page_test'];
 
   /**
    * Name of the administrative theme to use for tests.
    *
    * @var string
    */
-  protected $admin_theme;
+  protected $adminTheme;
 
   /**
    * Name of the default theme to use for tests.
    *
    * @var string
    */
-  protected $default_theme;
+  protected $defaultTheme;
 
   protected function setUp() {
     // Enable dummy module that implements hook_menu.
@@ -50,6 +51,7 @@ class MenuRouterTest extends WebTestBase {
   public function testMenuIntegration() {
     $this->doTestTitleMenuCallback();
     $this->doTestMenuOptionalPlaceholders();
+    $this->doTestMenuHierarchy();
     $this->doTestMenuOnRoute();
     $this->doTestMenuName();
     $this->doTestMenuLinksDiscoveredAlter();
@@ -62,7 +64,8 @@ class MenuRouterTest extends WebTestBase {
    */
   protected function doTestHookMenuIntegration() {
     // Generate base path with random argument.
-    $base_path = 'foo/' . $this->randomMachineName(8);
+    $machine_name = $this->randomMachineName(8);
+    $base_path = 'foo/' . $machine_name;
     $this->drupalGet($base_path);
     // Confirm correct controller activated.
     $this->assertText('test1');
@@ -70,8 +73,8 @@ class MenuRouterTest extends WebTestBase {
     $this->assertLink('Local task A');
     $this->assertLink('Local task B');
     // Confirm correct local task href.
-    $this->assertLinkByHref(_url($base_path));
-    $this->assertLinkByHref(_url($base_path . '/b'));
+    $this->assertLinkByHref(Url::fromRoute('menu_test.router_test1', ['bar' => $machine_name])->toString());
+    $this->assertLinkByHref(Url::fromRoute('menu_test.router_test2', ['bar' => $machine_name])->toString());
   }
 
   /**
@@ -152,13 +155,12 @@ class MenuRouterTest extends WebTestBase {
     $menu_link_manager = \Drupal::service('plugin.manager.menu.link');
     $menu_links = $menu_link_manager->loadLinksByRoute('menu_test.hierarchy_parent');
     $parent_link = reset($menu_links);
-    $menu_links = $menu_link_manager->loadLinksByRoute('menu_test.hierarchy_parent.child');
+    $menu_links = $menu_link_manager->loadLinksByRoute('menu_test.hierarchy_parent_child');
     $child_link = reset($menu_links);
-    $menu_links = $menu_link_manager->loadLinksByRoute('menu_test.hierarchy_parent.child2.child');
+    $menu_links = $menu_link_manager->loadLinksByRoute('menu_test.hierarchy_parent_child2');
     $unattached_child_link = reset($menu_links);
-
     $this->assertEqual($child_link->getParent(), $parent_link->getPluginId(), 'The parent of a directly attached child is correct.');
-    $this->assertEqual($unattached_child_link->getParent(), $parent_link->getPluginId(), 'The parent of a non-directly attached child is correct.');
+    $this->assertEqual($unattached_child_link->getParent(), $child_link->getPluginId(), 'The parent of a non-directly attached child is correct.');
   }
 
   /**
@@ -197,7 +199,7 @@ class MenuRouterTest extends WebTestBase {
       "%23%25%26%2B%2F%3F" . // Characters that look like a percent-escaped string.
       "éøïвβ中國書۞"; // Characters from various non-ASCII alphabets.
     $this->drupalGet($path);
-    $this->assertRaw('This is menu_test_callback().');
+    $this->assertRaw('This is the menuTestCallback content.');
   }
 
   /**
@@ -238,14 +240,14 @@ class MenuRouterTest extends WebTestBase {
    * Tests theme integration.
    */
   public function testThemeIntegration() {
-    $this->default_theme = 'bartik';
-    $this->admin_theme = 'seven';
+    $this->defaultTheme = 'bartik';
+    $this->adminTheme = 'seven';
 
     $theme_handler = $this->container->get('theme_handler');
-    $theme_handler->install(array($this->default_theme, $this->admin_theme));
+    $theme_handler->install([$this->defaultTheme, $this->adminTheme]);
     $this->config('system.theme')
-      ->set('default', $this->default_theme)
-      ->set('admin', $this->admin_theme)
+      ->set('default', $this->defaultTheme)
+      ->set('admin', $this->adminTheme)
       ->save();
 
     $this->doTestThemeCallbackMaintenanceMode();

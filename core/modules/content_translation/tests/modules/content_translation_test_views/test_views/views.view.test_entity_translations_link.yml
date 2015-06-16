@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -9,7 +9,7 @@ label: People
 module: views
 description: ''
 tag: ''
-base_table: users
+base_table: users_field_data
 base_field: uid
 core: 8.x
 display:
@@ -50,9 +50,8 @@ display:
           table: users_field_data
           field: name
           label: Username
-          link_to_user: true
-          format_username: true
-          plugin_id: user_name
+          plugin_id: field
+          type: user_name
           entity_type: user
           entity_field: name
         translation_link:
@@ -75,7 +74,7 @@ display:
       filters:
         uid_raw:
           id: uid_raw
-          table: users
+          table: users_field_data
           field: uid_raw
           operator: '!='
           value:
@@ -104,8 +103,6 @@ display:
             value: 'No people available.'
             format: plain_text
           plugin_id: text
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
   page_1:
     display_plugin: page
     id: page_1
@@ -113,5 +110,3 @@ display:
     position: null
     display_options:
       path: test-entity-translations-link
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null

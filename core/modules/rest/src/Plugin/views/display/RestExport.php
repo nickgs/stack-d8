@@ -7,14 +7,16 @@
 
 namespace Drupal\rest\Plugin\views\display;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
+use Drupal\Core\Cache\Cache;
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Cache\CacheableResponse;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\Core\Routing\RouteProviderInterface;
-use Drupal\Core\ContentNegotiation;
 use Drupal\views\ViewExecutable;
 use Drupal\views\Plugin\views\display\PathPluginBase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\RouteCollection;
 
 /**
@@ -73,11 +75,11 @@ class RestExport extends PathPluginBase {
   protected $mimeType;
 
   /**
-   * The content negotiation library.
+   * The renderer
    *
-   * @var \Drupal\Core\ContentNegotiation
+   * @var \Drupal\Core\Render\RendererInterface
    */
-  protected $contentNegotiation;
+  protected $renderer;
 
   /**
    * Constructs a Drupal\rest\Plugin\ResourceBase object.
@@ -92,12 +94,13 @@ class RestExport extends PathPluginBase {
    *   The route provider
    * @param \Drupal\Core\State\StateInterface $state
    *   The state key value store.
-   * @param \Drupal\Core\ContentNegotiation $content_negotiation
-   *   The content negotiation library.
+   * @param \Drupal\Core\Render\RendererInterface $renderer
+   *   The renderer.
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, RouteProviderInterface $route_provider, StateInterface $state, ContentNegotiation $content_negotiation) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, RouteProviderInterface $route_provider, StateInterface $state, RendererInterface $renderer) {
     parent::__construct($configuration, $plugin_id, $plugin_definition, $route_provider, $state);
-    $this->contentNegotiation = $content_negotiation;
+
+    $this->renderer = $renderer;
   }
 
   /**
@@ -110,7 +113,7 @@ class RestExport extends PathPluginBase {
       $plugin_definition,
       $container->get('router.route_provider'),
       $container->get('state'),
-      $container->get('content_negotiation')
+      $container->get('renderer')
     );
   }
 
@@ -120,12 +123,18 @@ class RestExport extends PathPluginBase {
   public function initDisplay(ViewExecutable $view, array &$display, array &$options = NULL) {
     parent::initDisplay($view, $display, $options);
 
-    $request_content_type = $this->contentNegotiation->getContentType($this->view->getRequest());
+    $request_content_type = $this->view->getRequest()->getRequestFormat();
     // Only use the requested content type if it's not 'html'. If it is then
     // default to 'json' to aid debugging.
     // @todo Remove the need for this when we have better content negotiation.
     if ($request_content_type != 'html') {
       $this->setContentType($request_content_type);
+    }
+    // If the requested content type is 'html' and the default 'json' is not
+    // selected as a format option in the view display, fallback to the first
+    // format in the array.
+    elseif (!empty($options['style']['options']['formats']) && !isset($options['style']['options']['formats'][$this->getContentType()])) {
+      $this->setContentType(reset($options['style']['options']['formats']));
     }
 
     $this->setMimeType($this->view->getRequest()->getMimeType($this->contentType));
@@ -256,7 +265,7 @@ class RestExport extends PathPluginBase {
       // REST exports should only respond to get methods.
       $requirements = array('_method' => 'GET');
 
-      // Format as a string using pipes as a delimeter.
+      // Format as a string using pipes as a delimiter.
       $requirements['_format'] = implode('|', $style_plugin->getFormats());
 
       // Add the new requirements to the route.
@@ -271,7 +280,16 @@ class RestExport extends PathPluginBase {
     parent::execute();
 
     $output = $this->view->render();
-    return new Response(drupal_render_root($output), 200, array('Content-type' => $this->getMimeType()));
+
+    $header = [];
+    $header['Content-type'] = $this->getMimeType();
+
+    $response = new CacheableResponse($this->renderer->renderRoot($output), 200);
+    $cache_metadata = CacheableMetadata::createFromRenderArray($output);
+
+    $response->addCacheableDependency($cache_metadata);
+
+    return $response;
   }
 
   /**
@@ -284,9 +302,19 @@ class RestExport extends PathPluginBase {
     // Wrap the output in a pre tag if this is for a live preview.
     if (!empty($this->view->live_preview)) {
       $build['#prefix'] = '<pre>';
-      $build['#markup'] = String::checkPlain($build['#markup']);
+      $build['#markup'] = SafeMarkup::checkPlain($build['#markup']);
       $build['#suffix'] = '</pre>';
     }
+
+    // Defaults for bubbleable rendering metadata.
+    $build['#cache']['tags'] = isset($build['#cache']['tags']) ? $build['#cache']['tags'] : array();
+    $build['#cache']['max-age'] = isset($build['#cache']['max-age']) ? $build['#cache']['max-age'] : Cache::PERMANENT;
+
+    /** @var \Drupal\views\Plugin\views\cache\CachePluginBase $cache */
+    $cache = $this->getPlugin('cache');
+
+    $build['#cache']['tags'] = Cache::mergeTags($build['#cache']['tags'], $cache->getCacheTags());
+    $build['#cache']['max-age'] = Cache::mergeMaxAges($build['#cache']['max-age'], $cache->getCacheMaxAge());
 
     return $build;
   }

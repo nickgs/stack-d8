@@ -23,7 +23,7 @@
    */
   Drupal.behaviors.tour = {
     attach: function (context) {
-      $('body').once('tour', function (index, element) {
+      $('body').once('tour').each(function () {
         var model = new Drupal.tour.models.StateModel();
         new Drupal.tour.views.ToggleTourView({
           el: $(context).find('#toolbar-tab-tour'),
@@ -42,7 +42,6 @@
         if (/tour=?/i.test(queryString)) {
           model.set('isActive', true);
         }
-
       });
     }
   };
@@ -87,7 +86,7 @@
       // Render the state.
       var isActive = this.model.get('isActive');
       this.$el.find('button')
-        .toggleClass('active', isActive)
+        .toggleClass('is-active', isActive)
         .prop('aria-pressed', isActive);
       return this;
     },
@@ -207,7 +206,7 @@
             $(this).find('.tour-progress').text(progress);
           })
           // Update the last item to have "End tour" as the button.
-          .last()
+          .eq(-1)
           .attr('data-text', Drupal.t('End tour'));
       }
     }

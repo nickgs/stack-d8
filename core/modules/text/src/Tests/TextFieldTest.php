@@ -7,7 +7,6 @@
 
 namespace Drupal\text\Tests;
 
-use Drupal\Component\Utility\String;
 use Drupal\Component\Utility\Unicode;
 use Drupal\field\Tests\String\StringFieldTest;
 
@@ -139,7 +138,7 @@ class TextFieldTest extends StringFieldTest {
     $entity = entity_load('entity_test', $id);
     $display = entity_get_display($entity->getEntityTypeId(), $entity->bundle(), 'full');
     $content = $display->build($entity);
-    $this->drupalSetContent(drupal_render($content));
+    $this->setRawContent(drupal_render($content));
     $this->assertNoRaw($value, 'HTML tags are not displayed.');
     $this->assertEscaped($value, 'Escaped HTML is displayed correctly.');
 
@@ -178,7 +177,7 @@ class TextFieldTest extends StringFieldTest {
     $entity = entity_load('entity_test', $id);
     $display = entity_get_display($entity->getEntityTypeId(), $entity->bundle(), 'full');
     $content = $display->build($entity);
-    $this->drupalSetContent(drupal_render($content));
+    $this->setRawContent(drupal_render($content));
     $this->assertRaw($value, 'Value is displayed unfiltered');
   }
 

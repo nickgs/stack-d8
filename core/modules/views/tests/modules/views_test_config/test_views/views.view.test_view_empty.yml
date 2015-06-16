@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies: {  }
 id: test_view_empty
@@ -27,8 +27,6 @@ display:
         options:
           offset: 0
         type: none
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default

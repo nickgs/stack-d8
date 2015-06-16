@@ -7,12 +7,16 @@
 
 namespace Drupal\Core\EventSubscriber;
 
+use Drupal\Core\Routing\AccessAwareRouterInterface;
+use Drupal\Core\Routing\RedirectDestinationInterface;
+use Drupal\Core\Url;
 use Drupal\Core\Utility\Error;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 /**
  * Exception subscriber for handling core default HTML error pages.
@@ -34,16 +38,26 @@ class DefaultExceptionHtmlSubscriber extends HttpExceptionSubscriberBase {
   protected $logger;
 
   /**
+   * The redirect destination service.
+   *
+   * @var \Drupal\Core\Routing\RedirectDestinationInterface
+   */
+  protected $redirectDestination;
+
+  /**
    * Constructs a new DefaultExceptionHtmlSubscriber.
    *
    * @param \Symfony\Component\HttpKernel\HttpKernelInterface $http_kernel
    *   The HTTP kernel.
    * @param \Psr\Log\LoggerInterface $logger
    *   The logger service.
+   * @param \Drupal\Core\Routing\RedirectDestinationInterface $redirect_destination
+   *   The redirect destination service.
    */
-  public function __construct(HttpKernelInterface $http_kernel, LoggerInterface $logger) {
+  public function __construct(HttpKernelInterface $http_kernel, LoggerInterface $logger, RedirectDestinationInterface $redirect_destination) {
     $this->httpKernel = $http_kernel;
     $this->logger = $logger;
+    $this->redirectDestination = $redirect_destination;
   }
 
   /**
@@ -63,13 +77,23 @@ class DefaultExceptionHtmlSubscriber extends HttpExceptionSubscriberBase {
   }
 
   /**
+   * Handles a 401 error for HTML.
+   *
+   * @param \Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent $event
+   *   The event to process.
+   */
+  public function on401(GetResponseForExceptionEvent $event) {
+    $this->makeSubrequest($event, Url::fromRoute('system.401')->toString(), Response::HTTP_UNAUTHORIZED);
+  }
+
+  /**
    * Handles a 403 error for HTML.
    *
    * @param \Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent $event
    *   The event to process.
    */
   public function on403(GetResponseForExceptionEvent $event) {
-    $this->makeSubrequest($event, 'system/403', Response::HTTP_FORBIDDEN);
+    $this->makeSubrequest($event, Url::fromRoute('system.403')->toString(), Response::HTTP_FORBIDDEN);
   }
 
   /**
@@ -79,7 +103,7 @@ class DefaultExceptionHtmlSubscriber extends HttpExceptionSubscriberBase {
    *   The event to process.
    */
   public function on404(GetResponseForExceptionEvent $event) {
-    $this->makeSubrequest($event, 'system/404', Response::HTTP_NOT_FOUND);
+    $this->makeSubrequest($event, Url::fromRoute('system.404')->toString(), Response::HTTP_NOT_FOUND);
   }
 
   /**
@@ -87,32 +111,49 @@ class DefaultExceptionHtmlSubscriber extends HttpExceptionSubscriberBase {
    *
    * @param \Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent $event
    *   The event to process
-   * @param string $path
-   *   The path to which to make a subrequest for this error message.
+   * @param string $url
+   *   The path/url to which to make a subrequest for this error message.
    * @param int $status_code
    *   The status code for the error being handled.
    */
-  protected function makeSubrequest(GetResponseForExceptionEvent $event, $path, $status_code) {
+  protected function makeSubrequest(GetResponseForExceptionEvent $event, $url, $status_code) {
     $request = $event->getRequest();
+    $exception = $event->getException();
 
-    // @todo Remove dependency on the internal _system_path attribute:
-    //   https://www.drupal.org/node/2293523.
-    $system_path = $request->attributes->get('_system_path');
+    if (!($url && $url[0] == '/')) {
+      $url = $request->getBasePath() . '/' . $url;
+    }
 
-    if ($path && $path != $system_path) {
+    $current_url = $request->getBasePath() . $request->getPathInfo();
+
+    if ($url != $request->getBasePath() . '/' && $url != $current_url) {
       if ($request->getMethod() === 'POST') {
-        $sub_request = Request::create($request->getBaseUrl() . '/' . $path, 'POST', ['destination' => $system_path, '_exception_statuscode' => $status_code] + $request->request->all(), $request->cookies->all(), [], $request->server->all());
+        $sub_request = Request::create($url, 'POST', $this->redirectDestination->getAsArray() + ['_exception_statuscode' => $status_code] + $request->request->all(), $request->cookies->all(), [], $request->server->all());
       }
       else {
-        $sub_request = Request::create($request->getBaseUrl() . '/' . $path, 'GET', $request->query->all() + ['destination' => $system_path, '_exception_statuscode' => $status_code], $request->cookies->all(), [], $request->server->all());
+        $sub_request = Request::create($url, 'GET', $request->query->all() + $this->redirectDestination->getAsArray() + ['_exception_statuscode' => $status_code], $request->cookies->all(), [], $request->server->all());
       }
 
       try {
         // Persist the 'exception' attribute to the subrequest.
         $sub_request->attributes->set('exception', $request->attributes->get('exception'));
+        // Persist the access result attribute to the subrequest, so that the
+        // error page inherits the access result of the master request.
+        $sub_request->attributes->set(AccessAwareRouterInterface::ACCESS_RESULT, $request->attributes->get(AccessAwareRouterInterface::ACCESS_RESULT));
+
+        // Carry over the session to the subrequest.
+        if ($session = $request->getSession()) {
+          $sub_request->setSession($session);
+        }
 
         $response = $this->httpKernel->handle($sub_request, HttpKernelInterface::SUB_REQUEST);
         $response->setStatusCode($status_code);
+
+        // Persist any special HTTP headers that were set on the exception.
+        if ($exception instanceof HttpExceptionInterface) {
+          $response->headers->add($exception->getHeaders());
+        }
+
         $event->setResponse($response);
       }
       catch (\Exception $e) {

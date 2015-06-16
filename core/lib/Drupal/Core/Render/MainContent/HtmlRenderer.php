@@ -8,20 +8,19 @@
 namespace Drupal\Core\Render\MainContent;
 
 use Drupal\Component\Plugin\PluginManagerInterface;
-use Drupal\Component\Utility\NestedArray;
-use Drupal\Core\Cache\Cache;
+use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Cache\CacheableResponse;
 use Drupal\Core\Controller\TitleResolverInterface;
 use Drupal\Core\Display\PageVariantInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Render\PageDisplayVariantSelectionEvent;
-use Drupal\Core\Render\Renderer;
+use Drupal\Core\Render\RenderCacheInterface;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Render\RenderEvents;
 use Drupal\Core\Routing\RouteMatchInterface;
 use Symfony\Component\DependencyInjection\ContainerAwareTrait;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Default main content renderer for HTML requests.
@@ -48,7 +47,6 @@ class HtmlRenderer implements MainContentRendererInterface {
    * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
    */
   protected $eventDispatcher;
-
   /**
    * The module handler.
    *
@@ -64,6 +62,13 @@ class HtmlRenderer implements MainContentRendererInterface {
   protected $renderer;
 
   /**
+   * The render cache service.
+   *
+   * @var \Drupal\Core\Render\RenderCacheInterface
+   */
+  protected $renderCache;
+
+  /**
    * Constructs a new HtmlRenderer.
    *
    * @param \Drupal\Core\Controller\TitleResolverInterface $title_resolver
@@ -76,13 +81,16 @@ class HtmlRenderer implements MainContentRendererInterface {
    *   The module handler.
    * @param \Drupal\Core\Render\RendererInterface $renderer
    *   The renderer service.
+   * @param \Drupal\Core\Render\RenderCacheInterface $render_cache
+   *   The render cache service.
    */
-  public function __construct(TitleResolverInterface $title_resolver, PluginManagerInterface $display_variant_manager, EventDispatcherInterface $event_dispatcher, ModuleHandlerInterface $module_handler, RendererInterface $renderer) {
+  public function __construct(TitleResolverInterface $title_resolver, PluginManagerInterface $display_variant_manager, EventDispatcherInterface $event_dispatcher, ModuleHandlerInterface $module_handler, RendererInterface $renderer, RenderCacheInterface $render_cache) {
     $this->titleResolver = $title_resolver;
     $this->displayVariantManager = $display_variant_manager;
     $this->eventDispatcher = $event_dispatcher;
     $this->moduleHandler = $module_handler;
     $this->renderer = $renderer;
+    $this->renderCache = $render_cache;
   }
 
   /**
@@ -106,7 +114,6 @@ class HtmlRenderer implements MainContentRendererInterface {
       '#type' => 'html',
       'page' => $page,
     ];
-    $html += element_info('html');
 
     // The special page regions will appear directly in html.html.twig, not in
     // page.html.twig, hence add them here, just before rendering html.html.twig.
@@ -129,23 +136,29 @@ class HtmlRenderer implements MainContentRendererInterface {
     }
     $content = $this->renderer->render($html);
 
-    // Store the cache tags associated with this page in a X-Drupal-Cache-Tags
-    // header. Also associate the "rendered" cache tag. This allows us to
-    // invalidate the entire render cache, regardless of the cache bin.
-    $cache_tags = Cache::mergeTags(
-      isset($html['page_top']) ? $html['page_top']['#cache']['tags'] : [],
-      $html['page']['#cache']['tags'],
-      isset($html['page_bottom']) ? $html['page_bottom']['#cache']['tags'] : [],
-      ['rendered']
-    );
-
     // Set the generator in the HTTP header.
     list($version) = explode('.', \Drupal::VERSION, 2);
 
-    return new Response($content, 200,[
-      'X-Drupal-Cache-Tags' => implode(' ', $cache_tags),
-      'X-Generator' => 'Drupal ' . $version . ' (http://drupal.org)'
+    $response = new CacheableResponse($content, 200,[
+      'Content-Type' => 'text/html; charset=UTF-8',
+      'X-Generator' => 'Drupal ' . $version . ' (https://www.drupal.org)'
     ]);
+
+    // Bubble the cacheability metadata associated with the rendered render
+    // arrays to the response.
+    foreach (['page_top', 'page', 'page_bottom'] as $region) {
+      if (isset($html[$region])) {
+        $response->addCacheableDependency(CacheableMetadata::createFromRenderArray($html[$region]));
+      }
+    }
+
+    // Also associate the "rendered" cache tag. This allows us to invalidate the
+    // entire render cache, regardless of the cache bin.
+    $default = new CacheableMetadata();
+    $default->setCacheTags(['rendered']);
+    $response->addCacheableDependency($default);
+
+    return $response;
   }
 
   /**
@@ -190,7 +203,7 @@ class HtmlRenderer implements MainContentRendererInterface {
       // @todo Remove this once https://www.drupal.org/node/2359901 lands.
       if (!empty($main_content)) {
         $this->renderer->render($main_content, FALSE);
-        $main_content = $this->renderer->getCacheableRenderArray($main_content) + [
+        $main_content = $this->renderCache->getCacheableRenderArray($main_content) + [
           '#title' => isset($main_content['#title']) ? $main_content['#title'] : NULL
         ];
       }
@@ -251,19 +264,19 @@ class HtmlRenderer implements MainContentRendererInterface {
       $function = $module . '_page_attachments';
       $function($attachments);
     }
-    if (array_diff(array_keys($attachments), ['#attached', '#post_render_cache']) !== []) {
-      throw new \LogicException('Only #attached and #post_render_cache may be set in hook_page_attachments().');
+    if (array_diff(array_keys($attachments), ['#attached', '#post_render_cache', '#cache']) !== []) {
+      throw new \LogicException('Only #attached, #post_render_cache and #cache may be set in hook_page_attachments().');
     }
 
     // Modules and themes can alter page attachments.
     $this->moduleHandler->alter('page_attachments', $attachments);
     \Drupal::theme()->alter('page_attachments', $attachments);
-    if (array_diff(array_keys($attachments), ['#attached', '#post_render_cache']) !== []) {
-      throw new \LogicException('Only #attached and #post_render_cache may be set in hook_page_attachments_alter().');
+    if (array_diff(array_keys($attachments), ['#attached', '#post_render_cache', '#cache']) !== []) {
+      throw new \LogicException('Only #attached, #post_render_cache and #cache may be set in hook_page_attachments_alter().');
     }
 
     // Merge the attachments onto the $page render array.
-    $page = Renderer::mergeBubbleableMetadata($page, $attachments);
+    $page = $this->renderer->mergeBubbleableMetadata($page, $attachments);
   }
 
   /**

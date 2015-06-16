@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateMessage;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade rss variable to system.*.yml.
  *
  * @group migrate_drupal
  */
-class MigrateSystemRssTest extends MigrateDrupalTestBase {
+class MigrateSystemRssTest extends MigrateDrupal6TestBase {
 
   /**
    * {@inheritdoc}
@@ -37,8 +37,8 @@ class MigrateSystemRssTest extends MigrateDrupalTestBase {
    */
   public function testSystemRss() {
     $config = $this->config('system.rss');
-    $this->assertIdentical($config->get('items.limit'), 10);
-    $this->assertIdentical($config->get('items.view_mode'), 'title');
+    $this->assertIdentical(10, $config->get('items.limit'));
+    $this->assertIdentical('title', $config->get('items.view_mode'));
   }
 
 }

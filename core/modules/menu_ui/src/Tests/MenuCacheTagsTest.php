@@ -53,8 +53,10 @@ class MenuCacheTagsTest extends PageCacheTagsTestBase {
       'block_view',
       'config:block_list',
       'config:block.block.' . $block->id(),
-      'block_plugin:system_menu_block__llama',
       'config:system.menu.llama',
+      // The cache contexts associated with the (in)accessible menu links are
+      // bubbled.
+      'config:user.role.anonymous',
     );
     $this->verifyPageCache($url, 'HIT', $expected_tags);
 
@@ -82,7 +84,9 @@ class MenuCacheTagsTest extends PageCacheTagsTestBase {
       'parent' => '',
       'title' => 'Alpaca',
       'menu_name' => 'llama',
-      'route_name' => '<front>',
+      'link' => [[
+        'uri' => 'internal:/',
+      ]],
       'bundle' => 'menu_name',
     ));
     $menu_link_2->save();

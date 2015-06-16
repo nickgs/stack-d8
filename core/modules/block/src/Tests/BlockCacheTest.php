@@ -72,13 +72,10 @@ class BlockCacheTest extends WebTestBase {
   }
 
   /**
-   * Test "cache_context.user.roles" cache context.
+   * Test "user.roles" cache context.
    */
   function testCachePerRole() {
-    $this->setBlockCacheConfig(array(
-      'max_age' => 600,
-      'contexts' => array('cache_context.user.roles'),
-    ));
+    \Drupal::state()->set('block_test.cache_contexts', ['user.roles']);
 
     // Enable our test block. Set some content for it to display.
     $current_content = $this->randomMachineName();
@@ -125,9 +122,7 @@ class BlockCacheTest extends WebTestBase {
    * Test a cacheable block without any cache context.
    */
   function testCacheGlobal() {
-    $this->setBlockCacheConfig(array(
-      'max_age' => 600,
-    ));
+    \Drupal::state()->set('block_test.cache_contexts', []);
 
     $current_content = $this->randomMachineName();
     \Drupal::state()->set('block_test.content', $current_content);
@@ -167,13 +162,10 @@ class BlockCacheTest extends WebTestBase {
   }
 
   /**
-   * Test "cache_context.user" cache context.
+   * Test "user" cache context.
    */
   function testCachePerUser() {
-    $this->setBlockCacheConfig(array(
-      'max_age' => 600,
-      'contexts' => array('cache_context.user'),
-    ));
+    \Drupal::state()->set('block_test.cache_contexts', ['user']);
 
     $current_content = $this->randomMachineName();
     \Drupal::state()->set('block_test.content', $current_content);
@@ -199,13 +191,10 @@ class BlockCacheTest extends WebTestBase {
   }
 
   /**
-   * Test "cache_context.url" cache context.
+   * Test "url" cache context.
    */
   function testCachePerPage() {
-    $this->setBlockCacheConfig(array(
-      'max_age' => 600,
-      'contexts' => array('cache_context.url'),
-    ));
+    \Drupal::state()->set('block_test.cache_contexts', ['url']);
 
     $current_content = $this->randomMachineName();
     \Drupal::state()->set('block_test.content', $current_content);

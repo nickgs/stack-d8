@@ -38,7 +38,7 @@ class AliasManager implements AliasManagerInterface, CacheDecoratorInterface {
   /**
    * Whether the cache needs to be written.
    *
-   * @var boolean
+   * @var bool
    */
   protected $cacheNeedsWriting = FALSE;
 
@@ -144,7 +144,7 @@ class AliasManager implements AliasManagerInterface, CacheDecoratorInterface {
 
       if (!empty($path_lookups)) {
         $twenty_four_hours = 60 * 60 * 24;
-        $this->cache->set($this->cacheKey, $path_lookups, REQUEST_TIME + $twenty_four_hours);
+        $this->cache->set($this->cacheKey, $path_lookups, $this->getRequestTime() + $twenty_four_hours);
       }
     }
   }
@@ -253,7 +253,7 @@ class AliasManager implements AliasManagerInterface, CacheDecoratorInterface {
   public function cacheClear($source = NULL) {
     if ($source) {
       foreach (array_keys($this->lookupMap) as $lang) {
-        $this->lookupMap[$lang][$source];
+        unset($this->lookupMap[$lang][$source]);
       }
     }
     else {
@@ -285,5 +285,14 @@ class AliasManager implements AliasManagerInterface, CacheDecoratorInterface {
      }
     }
     $this->whitelist->clear();
+  }
+
+  /**
+   * Wrapper method for REQUEST_TIME constant.
+   *
+   * @return int
+   */
+  protected function getRequestTime() {
+    return defined('REQUEST_TIME') ? REQUEST_TIME : (int) $_SERVER['REQUEST_TIME'];
   }
 }

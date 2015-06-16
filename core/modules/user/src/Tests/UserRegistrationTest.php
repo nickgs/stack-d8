@@ -44,6 +44,9 @@ class UserRegistrationTest extends WebTestBase {
     $accounts = entity_load_multiple_by_properties('user', array('name' => $name, 'mail' => $mail));
     $new_user = reset($accounts);
     $this->assertTrue($new_user->isActive(), 'New account is active after registration.');
+    $resetURL = user_pass_reset_url($new_user);
+    $this->drupalGet($resetURL);
+    $this->assertTitle(t('Set password | Drupal'), 'Page title is "Set password".');
 
     // Allow registration by site visitors, but require administrator approval.
     $config->set('register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL)->save();
@@ -138,13 +141,13 @@ class UserRegistrationTest extends WebTestBase {
 
     // Attempt to create a new account using an existing email address.
     $this->drupalPostForm('user/register', $edit, t('Create new account'));
-    $this->assertText(t('The email address @email is already registered.', array('@email' => $duplicate_user->getEmail())), 'Supplying an exact duplicate email address displays an error message');
+    $this->assertText(t('The email address @email is already taken.', array('@email' => $duplicate_user->getEmail())), 'Supplying an exact duplicate email address displays an error message');
 
     // Attempt to bypass duplicate email registration validation by adding spaces.
     $edit['mail'] = '   ' . $duplicate_user->getEmail() . '   ';
 
     $this->drupalPostForm('user/register', $edit, t('Create new account'));
-    $this->assertText(t('The email address @email is already registered.', array('@email' => $duplicate_user->getEmail())), 'Supplying a duplicate email address with added whitespace displays an error message');
+    $this->assertText(t('The email address @email is already taken.', array('@email' => $duplicate_user->getEmail())), 'Supplying a duplicate email address with added whitespace displays an error message');
   }
 
   function testRegistrationDefaultValues() {
@@ -166,6 +169,9 @@ class UserRegistrationTest extends WebTestBase {
     $this->drupalGet('user/register');
     $this->assertNoRaw('<details id="edit-account"><summary>Account information</summary>');
 
+    // Check the presence of expected cache tags.
+    $this->assertCacheTag('config:user.settings');
+
     $edit = array();
     $edit['name'] = $name = $this->randomMachineName();
     $edit['mail'] = $mail = $edit['name'] . '@example.com';
@@ -178,7 +184,6 @@ class UserRegistrationTest extends WebTestBase {
     $new_user = reset($accounts);
     $this->assertEqual($new_user->getUsername(), $name, 'Username matches.');
     $this->assertEqual($new_user->getEmail(), $mail, 'Email address matches.');
-    $this->assertEqual($new_user->getSignature(), '', 'Correct signature field.');
     $this->assertTrue(($new_user->getCreatedTime() > REQUEST_TIME - 20 ), 'Correct creation time.');
     $this->assertEqual($new_user->isActive(), $config_user_settings->get('register') == USER_REGISTER_VISITORS ? 1 : 0, 'Correct status field.');
     $this->assertEqual($new_user->getTimezone(), $config_system_date->get('timezone.default'), 'Correct time zone field.');
@@ -215,6 +220,8 @@ class UserRegistrationTest extends WebTestBase {
     // Check that the field does not appear on the registration form.
     $this->drupalGet('user/register');
     $this->assertNoText($field->label(), 'The field does not appear on user registration form');
+    $this->assertCacheTag('config:core.entity_form_display.user.user.register');
+    $this->assertCacheTag('config:user.settings');
 
     // Have the field appear on the registration form.
     entity_get_form_display('user', 'user', 'register')
@@ -223,6 +230,7 @@ class UserRegistrationTest extends WebTestBase {
 
     $this->drupalGet('user/register');
     $this->assertText($field->label(), 'The field appears on user registration form');
+    $this->assertRegistrationFormCacheTagsWithUserFields();
 
     // Check that validation errors are correctly reported.
     $edit = array();
@@ -231,10 +239,12 @@ class UserRegistrationTest extends WebTestBase {
     // Missing input in required field.
     $edit['test_user_field[0][value]'] = '';
     $this->drupalPostForm(NULL, $edit, t('Create new account'));
+    $this->assertRegistrationFormCacheTagsWithUserFields();
     $this->assertRaw(t('@name field is required.', array('@name' => $field->label())), 'Field validation error was correctly reported.');
     // Invalid input.
     $edit['test_user_field[0][value]'] = '-1';
     $this->drupalPostForm(NULL, $edit, t('Create new account'));
+    $this->assertRegistrationFormCacheTagsWithUserFields();
     $this->assertRaw(t('%name does not accept the value -1.', array('%name' => $field->label())), 'Field validation error was correctly reported.');
 
     // Submit with valid data.
@@ -244,13 +254,14 @@ class UserRegistrationTest extends WebTestBase {
     // Check user fields.
     $accounts = entity_load_multiple_by_properties('user', array('name' => $name, 'mail' => $mail));
     $new_user = reset($accounts);
-    $this->assertEqual($new_user->test_user_field->value, $value, 'The field value was correclty saved.');
+    $this->assertEqual($new_user->test_user_field->value, $value, 'The field value was correctly saved.');
 
     // Check that the 'add more' button works.
-    $field_storage->cardinality = FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED;
+    $field_storage->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
     $field_storage->save();
     foreach (array('js', 'nojs') as $js) {
       $this->drupalGet('user/register');
+      $this->assertRegistrationFormCacheTagsWithUserFields();
       // Add two inputs.
       $value = rand(1, 255);
       $edit = array();
@@ -272,10 +283,20 @@ class UserRegistrationTest extends WebTestBase {
       // Check user fields.
       $accounts = entity_load_multiple_by_properties('user', array('name' => $name, 'mail' => $mail));
       $new_user = reset($accounts);
-      $this->assertEqual($new_user->test_user_field[0]->value, $value, format_string('@js : The field value was correclty saved.', array('@js' => $js)));
-      $this->assertEqual($new_user->test_user_field[1]->value, $value + 1, format_string('@js : The field value was correclty saved.', array('@js' => $js)));
-      $this->assertEqual($new_user->test_user_field[2]->value, $value + 2, format_string('@js : The field value was correclty saved.', array('@js' => $js)));
+      $this->assertEqual($new_user->test_user_field[0]->value, $value, format_string('@js : The field value was correctly saved.', array('@js' => $js)));
+      $this->assertEqual($new_user->test_user_field[1]->value, $value + 1, format_string('@js : The field value was correctly saved.', array('@js' => $js)));
+      $this->assertEqual($new_user->test_user_field[2]->value, $value + 2, format_string('@js : The field value was correctly saved.', array('@js' => $js)));
     }
+  }
+
+  /**
+   * Asserts the presence of cache tags on registration form with user fields.
+   */
+  protected function assertRegistrationFormCacheTagsWithUserFields() {
+    $this->assertCacheTag('config:core.entity_form_display.user.user.register');
+    $this->assertCacheTag('config:field.field.user.user.test_user_field');
+    $this->assertCacheTag('config:field.storage.user.test_user_field');
+    $this->assertCacheTag('config:user.settings');
   }
 
 }

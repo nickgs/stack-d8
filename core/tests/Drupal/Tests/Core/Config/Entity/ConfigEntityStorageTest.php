@@ -22,7 +22,7 @@ class ConfigEntityStorageTest extends UnitTestCase {
   /**
    * The entity type.
    *
-   * @var \Drupal\Core\Entity\EntityTypeInterface|\PHPUnit_Framework_MockObject_MockObject
+   * @var \Drupal\Core\Config\Entity\ConfigEntityTypeInterface|\PHPUnit_Framework_MockObject_MockObject
    */
   protected $entityType;
 
@@ -97,6 +97,13 @@ class ConfigEntityStorageTest extends UnitTestCase {
   protected $typedConfigManager;
 
   /**
+   * The configuration manager.
+   *
+   * @var \Drupal\Core\Config\ConfigManagerInterface|\PHPUnit_Framework_MockObject_MockObject
+   */
+  protected $configManager;
+
+  /**
    * {@inheritdoc}
    *
    * @covers ::__construct
@@ -104,7 +111,7 @@ class ConfigEntityStorageTest extends UnitTestCase {
   protected function setUp() {
     parent::setUp();
 
-    $this->entityType = $this->getMock('Drupal\Core\Entity\EntityTypeInterface');
+    $this->entityType = $this->getMock('Drupal\Core\Config\Entity\ConfigEntityTypeInterface');
     $this->entityTypeId = 'test_entity_type';
     $this->entityType->expects($this->any())
       ->method('getKey')
@@ -132,8 +139,8 @@ class ConfigEntityStorageTest extends UnitTestCase {
 
     $this->languageManager = $this->getMock('Drupal\Core\Language\LanguageManagerInterface');
     $this->languageManager->expects($this->any())
-      ->method('getDefaultLanguage')
-      ->will($this->returnValue(new Language(array('langcode' => 'en'))));
+      ->method('getCurrentLanguage')
+      ->willReturn(new Language(array('id' => 'hu')));
 
     $this->configFactory = $this->getMock('Drupal\Core\Config\ConfigFactoryInterface');
 
@@ -160,10 +167,15 @@ class ConfigEntityStorageTest extends UnitTestCase {
     $this->typedConfigManager->expects($this->any())
       ->method('getDefinition')
       ->will($this->returnValue(array('mapping' => array('id' => '', 'uuid' => '', 'dependencies' => ''))));
+
+    $this->configManager = $this->getMock('Drupal\Core\Config\ConfigManagerInterface');
+
     $container = new ContainerBuilder();
     $container->set('entity.manager', $this->entityManager);
     $container->set('config.typed', $this->typedConfigManager);
     $container->set('cache_tags.invalidator', $this->cacheTagsInvalidator);
+    $container->set('config.manager', $this->configManager);
+    $container->set('language_manager', $this->languageManager);
     \Drupal::setContainer($container);
 
   }
@@ -219,6 +231,34 @@ class ConfigEntityStorageTest extends UnitTestCase {
   }
 
   /**
+   * @covers ::create
+   * @covers ::doCreate
+   */
+  public function testCreateWithCurrentLanguage() {
+    $this->languageManager->expects($this->any())
+      ->method('getLanguage')
+      ->with('hu')
+      ->willReturn(new Language(array('id' => 'hu')));
+
+    $entity = $this->entityStorage->create(array('id' => 'foo'));
+    $this->assertSame('hu', $entity->language()->getId());
+  }
+
+  /**
+   * @covers ::create
+   * @covers ::doCreate
+   */
+  public function testCreateWithExplicitLanguage() {
+    $this->languageManager->expects($this->any())
+      ->method('getLanguage')
+      ->with('en')
+      ->willReturn(new Language(array('id' => 'en')));
+
+    $entity = $this->entityStorage->create(array('id' => 'foo', 'langcode' => 'en'));
+    $this->assertSame('en', $entity->language()->getId());
+  }
+
+  /**
    * @covers ::save
    * @covers ::doSave
    *
@@ -239,6 +279,9 @@ class ConfigEntityStorageTest extends UnitTestCase {
       ->method('setData');
     $config_object->expects($this->once())
       ->method('save');
+    $config_object->expects($this->atLeastOnce())
+      ->method('get')
+      ->willReturn([]);
 
     $this->cacheTagsInvalidator->expects($this->once())
       ->method('invalidateTags')
@@ -303,6 +346,9 @@ class ConfigEntityStorageTest extends UnitTestCase {
       ->method('setData');
     $config_object->expects($this->once())
       ->method('save');
+    $config_object->expects($this->atLeastOnce())
+      ->method('get')
+      ->willReturn([]);
 
     $this->cacheTagsInvalidator->expects($this->once())
       ->method('invalidateTags')
@@ -368,6 +414,9 @@ class ConfigEntityStorageTest extends UnitTestCase {
       ->method('setData');
     $config_object->expects($this->once())
       ->method('save');
+    $config_object->expects($this->atLeastOnce())
+      ->method('get')
+      ->willReturn([]);
 
     $this->cacheTagsInvalidator->expects($this->once())
       ->method('invalidateTags')
@@ -506,6 +555,9 @@ class ConfigEntityStorageTest extends UnitTestCase {
       ->will($this->returnValue(TRUE));
     $config_object->expects($this->once())
       ->method('save');
+    $config_object->expects($this->atLeastOnce())
+      ->method('get')
+      ->willReturn([]);
 
     $this->cacheTagsInvalidator->expects($this->once())
       ->method('invalidateTags')
@@ -728,6 +780,10 @@ class ConfigEntityStorageTest extends UnitTestCase {
    * @covers ::doDelete
    */
   public function testDelete() {
+    // Dependencies are tested in \Drupal\config\Tests\ConfigDependencyTest.
+    $this->configManager->expects($this->any())
+      ->method('getConfigEntitiesToChangeOnDependencyRemoval')
+      ->willReturn(['update' => [], 'delete' => [], 'unchanged' => []]);
     $entities = array();
     $configs = array();
     $config_map = array();

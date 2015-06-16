@@ -11,6 +11,7 @@ use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Entity\EntityManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Render\RendererInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
@@ -64,13 +65,21 @@ class BookManager implements BookManagerInterface {
   protected $bookTreeFlattened;
 
   /**
+   * The renderer.
+   *
+   * @var \Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
    * Constructs a BookManager object.
    */
-  public function __construct(EntityManagerInterface $entity_manager, TranslationInterface $translation, ConfigFactoryInterface $config_factory, BookOutlineStorageInterface $book_outline_storage) {
+  public function __construct(EntityManagerInterface $entity_manager, TranslationInterface $translation, ConfigFactoryInterface $config_factory, BookOutlineStorageInterface $book_outline_storage, RendererInterface $renderer) {
     $this->entityManager = $entity_manager;
     $this->stringTranslation = $translation;
     $this->configFactory = $config_factory;
     $this->bookOutlineStorage = $book_outline_storage;
+    $this->renderer = $renderer;
   }
 
   /**
@@ -317,7 +326,8 @@ class BookManager implements BookManagerInterface {
    *   A parent selection form element.
    */
   protected function addParentSelectFormElements(array $book_link) {
-    if ($this->configFactory->get('book.settings')->get('override_parent_selector')) {
+    $config = $this->configFactory->get('book.settings');
+    if ($config->get('override_parent_selector')) {
       return array();
     }
     // Offer a message or a drop-down to choose a different parent page.
@@ -352,6 +362,7 @@ class BookManager implements BookManagerInterface {
         '#suffix' => '</div>',
       );
     }
+    $this->renderer->addCacheableDependency($form, $config);
 
     return $form;
   }
@@ -503,29 +514,21 @@ class BookManager implements BookManagerInterface {
 
     $num_items = count($items);
     foreach ($items as $i => $data) {
-      $class = array();
-      if ($i == 0) {
-        $class[] = 'first';
-      }
-      if ($i == $num_items - 1) {
-        $class[] = 'last';
-      }
+      $class = ['menu-item'];
       // Set a class for the <li>-tag. Since $data['below'] may contain local
       // tasks, only set 'expanded' class if the link also has children within
       // the current book.
       if ($data['link']['has_children'] && $data['below']) {
-        $class[] = 'expanded';
+        $class[] = 'menu-item--expanded';
       }
       elseif ($data['link']['has_children']) {
-        $class[] = 'collapsed';
+        $class[] = 'menu-item--collapsed';
       }
-      else {
-        $class[] = 'leaf';
-      }
+
       // Set a class if the link is in the active trail.
       if ($data['link']['in_active_trail']) {
-        $class[] = 'active-trail';
-        $data['link']['localized_options']['attributes']['class'][] = 'active-trail';
+        $class[] = 'menu-item--active-trail';
+        $data['link']['localized_options']['attributes']['class'][] = 'menu-item--active-trail';
       }
 
       // Allow book-specific theme overrides.
@@ -886,7 +889,7 @@ class BookManager implements BookManagerInterface {
       // @todo This should be actually filtering on the desired node status field
       //   language and just fall back to the default language.
       $nids = \Drupal::entityQuery('node')
-        ->condition('nid', $nids)
+        ->condition('nid', $nids, 'IN')
         ->condition('status', 1)
         ->execute();
 

@@ -7,12 +7,14 @@
 
 namespace Drupal\migrate\Entity;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Config\Entity\ConfigEntityBase;
 use Drupal\migrate\Exception\RequirementsException;
 use Drupal\migrate\MigrateException;
+use Drupal\migrate\MigrateSkipRowException;
 use Drupal\migrate\Plugin\MigrateIdMapInterface;
 use Drupal\migrate\Plugin\RequirementsInterface;
+use Drupal\Component\Utility\NestedArray;
 
 /**
  * Defines the Migration entity.
@@ -75,6 +77,9 @@ class Migration extends ConfigEntityBase implements MigrationInterface, Requirem
 
   /**
    * The configuration describing the process plugins.
+   *
+   * This is a strictly internal property and should not returned to calling
+   * code, use getProcess() instead.
    *
    * @var array
    */
@@ -274,8 +279,11 @@ class Migration extends ConfigEntityBase implements MigrationInterface, Requirem
   /**
    * {@inheritdoc}
    */
-  public function getDestinationPlugin() {
+  public function getDestinationPlugin($stub_being_requested = FALSE) {
     if (!isset($this->destinationPlugin)) {
+      if ($stub_being_requested && !empty($this->destination['no_stub'])) {
+        throw new MigrateSkipRowException;
+      }
       $this->destinationPlugin = \Drupal::service('plugin.manager.migrate.destination')->createInstance($this->destination['plugin'], $this->destination, $this);
     }
     return $this->destinationPlugin;
@@ -344,7 +352,7 @@ class Migration extends ConfigEntityBase implements MigrationInterface, Requirem
       }
     }
     if ($missing_migrations) {
-      throw new RequirementsException(String::format('Missing migrations @requirements.', ['@requirements' => implode(', ', $missing_migrations)]), ['requirements' => $missing_migrations]);
+      throw new RequirementsException(SafeMarkup::format('Missing migrations @requirements.', ['@requirements' => implode(', ', $missing_migrations)]), ['requirements' => $missing_migrations]);
     }
   }
 
@@ -387,8 +395,20 @@ class Migration extends ConfigEntityBase implements MigrationInterface, Requirem
   /**
    * {@inheritdoc}
    */
+  public function set($property_name, $value) {
+    if ($property_name == 'source') {
+      // Invalidate the source plugin.
+      unset($this->sourcePlugin);
+    }
+    return parent::set($property_name, $value);
+  }
+
+
+  /**
+   * {@inheritdoc}
+   */
   public function getProcess() {
-    return $this->process;
+    return $this->getProcessNormalized($this->process);
   }
 
   /**
@@ -396,6 +416,31 @@ class Migration extends ConfigEntityBase implements MigrationInterface, Requirem
    */
   public function setProcess(array $process) {
     $this->process = $process;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setProcessOfProperty($property, $process_of_property) {
+    $this->process[$property] = $process_of_property;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function mergeProcessOfProperty($property, array $process_of_property) {
+    // If we already have a process value then merge the incoming process array
+    //otherwise simply set it.
+    $current_process = $this->getProcess();
+    if (isset($current_process[$property])) {
+      $this->process = NestedArray::mergeDeepArray([$current_process, $this->getProcessNormalized([$property => $process_of_property])], TRUE);
+    }
+    else {
+      $this->setProcessOfProperty($property, $process_of_property);
+    }
+
     return $this;
   }
 

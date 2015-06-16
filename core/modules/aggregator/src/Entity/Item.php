@@ -108,7 +108,8 @@ class Item extends ContentEntityBase implements ItemInterface {
       ))
       ->setDisplayConfigurable('view', TRUE);
 
-    // @todo Convert to a real UUID field in https://drupal.org/node/2149851.
+    // @todo Convert to a real UUID field in
+    //   https://www.drupal.org/node/2149851.
     $fields['guid'] = BaseFieldDefinition::create('string_long')
       ->setLabel(t('GUID'))
       ->setDescription(t('Unique identifier for the feed item.'));
@@ -147,7 +148,7 @@ class Item extends ContentEntityBase implements ItemInterface {
   /**
    * {@inheritdoc}
    */
-  public function  getLink() {
+  public function getLink() {
     return $this->get('link')->value;
   }
 

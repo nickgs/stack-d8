@@ -7,7 +7,7 @@
 
 namespace Drupal\Core\Entity\Plugin\EntityReferenceSelection;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Database\Query\AlterableInterface;
 use Drupal\Core\Database\Query\SelectInterface;
 use Drupal\Core\Entity\EntityManagerInterface;
@@ -124,18 +124,9 @@ class SelectionBase extends PluginBase implements SelectionInterface, ContainerF
         $bundle_options[$bundle_name] = $bundle_info['label'];
       }
 
-      $target_bundles_title = $this->t('Bundles');
-      // Default core entity types with sensible labels.
-      if ($entity_type_id == 'node') {
-        $target_bundles_title = $this->t('Content types');
-      }
-      elseif ($entity_type_id == 'taxonomy_term') {
-        $target_bundles_title = $this->t('Vocabularies');
-      }
-
       $form['target_bundles'] = array(
         '#type' => 'checkboxes',
-        '#title' => $target_bundles_title,
+        '#title' => $this->t('Bundles'),
         '#options' => $bundle_options,
         '#default_value' => (!empty($selection_handler_settings['target_bundles'])) ? $selection_handler_settings['target_bundles'] : array(),
         '#required' => TRUE,
@@ -244,7 +235,7 @@ class SelectionBase extends PluginBase implements SelectionInterface, ContainerF
     $entities = entity_load_multiple($target_type, $result);
     foreach ($entities as $entity_id => $entity) {
       $bundle = $entity->bundle();
-      $options[$bundle][$entity_id] = String::checkPlain($entity->label());
+      $options[$bundle][$entity_id] = SafeMarkup::checkPlain($entity->label());
     }
 
     return $options;
@@ -329,7 +320,7 @@ class SelectionBase extends PluginBase implements SelectionInterface, ContainerF
    *   The EntityQuery object with the basic conditions and sorting applied to
    *   it.
    */
-  public function buildEntityQuery($match = NULL, $match_operator = 'CONTAINS') {
+  protected function buildEntityQuery($match = NULL, $match_operator = 'CONTAINS') {
     $target_type = $this->configuration['target_type'];
     $handler_settings = $this->configuration['handler_settings'];
     $entity_type = $this->entityManager->getDefinition($target_type);

@@ -10,12 +10,13 @@ namespace Drupal\Core\Form;
 use Drupal\Component\Utility\Crypt;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\NestedArray;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Access\CsrfTokenGenerator;
 use Drupal\Core\DependencyInjection\ClassResolverInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Render\Element;
+use Drupal\Core\Render\ElementInfoManagerInterface;
 use Drupal\Core\Theme\ThemeManagerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -48,6 +49,13 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
    * @var \Symfony\Component\HttpFoundation\RequestStack
    */
   protected $requestStack;
+
+  /**
+   * The element info manager.
+   *
+   * @var \Drupal\Core\Render\ElementInfoManagerInterface
+   */
+  protected $elementInfo;
 
   /**
    * The CSRF token generator to validate the form token.
@@ -111,12 +119,14 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
    *   The request stack.
    * @param \Drupal\Core\DependencyInjection\ClassResolverInterface $class_resolver
    *   The class resolver.
+   * @param \Drupal\Core\Render\ElementInfoManagerInterface $element_info
+   *   The element info manager.
    * @param \Drupal\Core\Theme\ThemeManagerInterface $theme_manager
    *   The theme manager.
    * @param \Drupal\Core\Access\CsrfTokenGenerator $csrf_token
    *   The CSRF token generator.
    */
-  public function __construct(FormValidatorInterface $form_validator, FormSubmitterInterface $form_submitter, FormCacheInterface $form_cache, ModuleHandlerInterface $module_handler, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, ClassResolverInterface $class_resolver, ThemeManagerInterface $theme_manager, CsrfTokenGenerator $csrf_token = NULL) {
+  public function __construct(FormValidatorInterface $form_validator, FormSubmitterInterface $form_submitter, FormCacheInterface $form_cache, ModuleHandlerInterface $module_handler, EventDispatcherInterface $event_dispatcher, RequestStack $request_stack, ClassResolverInterface $class_resolver, ElementInfoManagerInterface $element_info, ThemeManagerInterface $theme_manager, CsrfTokenGenerator $csrf_token = NULL) {
     $this->formValidator = $form_validator;
     $this->formSubmitter = $form_submitter;
     $this->formCache = $form_cache;
@@ -124,6 +134,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
     $this->eventDispatcher = $event_dispatcher;
     $this->requestStack = $request_stack;
     $this->classResolver = $class_resolver;
+    $this->elementInfo = $element_info;
     $this->csrfToken = $csrf_token;
     $this->themeManager = $theme_manager;
   }
@@ -139,7 +150,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
     }
 
     if (!is_object($form_arg) || !($form_arg instanceof FormInterface)) {
-      throw new \InvalidArgumentException(String::format('The form argument @form_arg is not a valid form.', array('@form_arg' => $form_arg)));
+      throw new \InvalidArgumentException(SafeMarkup::format('The form argument @form_arg is not a valid form.', array('@form_arg' => $form_arg)));
     }
 
     // Add the $form_arg as the callback object and determine the form ID.
@@ -301,9 +312,9 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
       $form['#build_id'] = 'form-' . Crypt::randomBytesBase64();
     }
 
-    // #action defaults to request_uri(), but in case of Ajax and other partial
-    // rebuilds, the form is submitted to an alternate URL, and the original
-    // #action needs to be retained.
+    // #action defaults to $request->getRequestUri(), but in case of Ajax and
+    // other partial rebuilds, the form is submitted to an alternate URL, and
+    // the original #action needs to be retained.
     if (isset($old_form['#action']) && !empty($rebuild_info['copy']['#action'])) {
       $form['#action'] = $old_form['#action'];
     }
@@ -338,6 +349,13 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
    */
   public function setCache($form_build_id, $form, FormStateInterface $form_state) {
     $this->formCache->setCache($form_build_id, $form, $form_state);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function deleteCache($form_build_id) {
+    $this->formCache->deleteCache($form_build_id);
   }
 
   /**
@@ -467,18 +485,25 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
       }
       $this->formValidator->validateForm($form_id, $form, $form_state);
 
-      // drupal_html_id() maintains a cache of element IDs it has seen, so it
-      // can prevent duplicates. We want to be sure we reset that cache when a
-      // form is processed, so scenarios that result in the form being built
-      // behind the scenes and again for the browser don't increment all the
-      // element IDs needlessly.
+      // \Drupal\Component\Utility\Html::getUniqueId() maintains a cache of
+      // element IDs it has seen, so it can prevent duplicates. We want to be
+      // sure we reset that cache when a form is processed, so scenarios that
+      // result in the form being built behind the scenes and again for the
+      // browser don't increment all the element IDs needlessly.
       if (!FormState::hasAnyErrors()) {
         // In case of errors, do not break HTML IDs of other forms.
         Html::resetSeenIds();
       }
 
+      // If there are no errors and the form is not rebuilding, submit the form.
       if (!$form_state->isRebuilding() && !FormState::hasAnyErrors()) {
-        if ($submit_response = $this->formSubmitter->doSubmitForm($form, $form_state)) {
+        $submit_response = $this->formSubmitter->doSubmitForm($form, $form_state);
+        // If this form was cached, delete it from the cache after submission.
+        if ($form_state->isCached()) {
+          $this->deleteCache($form['#build_id']);
+        }
+        // If the form submission directly returned a response, return it now.
+        if ($submit_response) {
           return $submit_response;
         }
       }
@@ -534,7 +559,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
 
     // Only update the action if it is not already set.
     if (!isset($form['#action'])) {
-      $form['#action'] = $this->requestUri();
+      $form['#action'] = $this->requestStack->getMasterRequest()->getRequestUri();
     }
 
     // Fix the form method, if it is 'get' in $form_state, but not in $form.
@@ -606,7 +631,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
       $form['#id'] = Html::getUniqueId($form_id);
     }
 
-    $form += $this->getElementInfo('form');
+    $form += $this->elementInfo->getInfo('form');
     $form += array('#tree' => FALSE, '#parents' => array());
     $form['#validate'][] = '::validateForm';
     $form['#submit'][] = '::submitForm';
@@ -677,7 +702,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
     $element['#processed'] = FALSE;
 
     // Use element defaults.
-    if (isset($element['#type']) && empty($element['#defaults_loaded']) && ($info = $this->getElementInfo($element['#type']))) {
+    if (isset($element['#type']) && empty($element['#defaults_loaded']) && ($info = $this->elementInfo->getInfo($element['#type']))) {
       // Overlay $info onto $element, retaining preexisting keys in $element.
       $element += $info;
       $element['#defaults_loaded'] = TRUE;
@@ -751,7 +776,7 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
     foreach (Element::children($element) as $key) {
       // Prior to checking properties of child elements, their default
       // properties need to be loaded.
-      if (isset($element[$key]['#type']) && empty($element[$key]['#defaults_loaded']) && ($info = $this->getElementInfo($element[$key]['#type']))) {
+      if (isset($element[$key]['#type']) && empty($element[$key]['#defaults_loaded']) && ($info = $this->elementInfo->getInfo($element[$key]['#type']))) {
         $element[$key] += $info;
         $element[$key]['#defaults_loaded'] = TRUE;
       }
@@ -801,8 +826,8 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
     // The #after_build flag allows any piece of a form to be altered
     // after normal input parsing has been completed.
     if (isset($element['#after_build']) && !isset($element['#after_build_done'])) {
-      foreach ($element['#after_build'] as $callable) {
-        $element = call_user_func_array($callable, array($element, &$form_state));
+      foreach ($element['#after_build'] as $callback) {
+        $element = call_user_func_array($form_state->prepareCallback($callback), array($element, &$form_state));
       }
       $element['#after_build_done'] = TRUE;
     }
@@ -1079,15 +1104,6 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
   }
 
   /**
-   * Wraps element_info().
-   *
-   * @return array
-   */
-  protected function getElementInfo($type) {
-    return element_info($type);
-  }
-
-  /**
    * Gets the current active user.
    *
    * @return \Drupal\Core\Session\AccountInterface
@@ -1097,15 +1113,6 @@ class FormBuilder implements FormBuilderInterface, FormValidatorInterface, FormS
       $this->currentUser = \Drupal::currentUser();
     }
     return $this->currentUser;
-  }
-
-  /**
-   * Gets the current request URI.
-   *
-   * @return string
-   */
-  protected function requestUri() {
-    return request_uri();
   }
 
 }

@@ -8,12 +8,11 @@
 namespace Drupal\aggregator;
 
 use Drupal\views\EntityViewsData;
-use Drupal\views\EntityViewsDataInterface;
 
 /**
  * Provides the views data for the aggregator feed entity type.
  */
-class AggregatorFeedViewsData extends EntityViewsData implements EntityViewsDataInterface {
+class AggregatorFeedViewsData extends EntityViewsData {
 
   /**
    * {@inheritdoc}
@@ -36,7 +35,8 @@ class AggregatorFeedViewsData extends EntityViewsData implements EntityViewsData
     $data['aggregator_feed']['fid']['filter']['id'] = 'numeric';
 
     $data['aggregator_feed']['title']['help'] = $this->t('The title of the aggregator feed.');
-    $data['aggregator_feed']['title']['field']['id'] = 'aggregator_title_link';
+    $data['aggregator_feed']['title']['field']['default_formatter'] = 'aggregator_title';
+
     $data['aggregator_feed']['argument']['id'] = 'string';
 
     $data['aggregator_feed']['url']['help'] = $this->t('The fully-qualified URL of the feed.');
@@ -46,7 +46,6 @@ class AggregatorFeedViewsData extends EntityViewsData implements EntityViewsData
     $data['aggregator_feed']['checked']['help'] = $this->t('The date the feed was last checked for new content.');
 
     $data['aggregator_feed']['description']['help'] = $this->t('The description of the aggregator feed.');
-    $data['aggregator_feed']['description']['field']['id'] = 'xss';
     $data['aggregator_feed']['description']['field']['click sortable'] = FALSE;
 
     $data['aggregator_feed']['modified']['help'] = $this->t('The date of the most recent new content on the feed.');
@@ -55,4 +54,3 @@ class AggregatorFeedViewsData extends EntityViewsData implements EntityViewsData
   }
 
 }
-

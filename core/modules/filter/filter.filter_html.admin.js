@@ -15,7 +15,8 @@
     Drupal.filterConfiguration.liveSettingParsers.filter_html = {
       getRules: function () {
         var currentValue = $('#edit-filters-filter-html-settings-allowed-html').val();
-        var rules = [], rule;
+        var rules = [];
+        var rule;
 
         // Build a FilterHTMLRule that reflects the hard-coded behavior that
         // strips all "style" attribute and all "on*" attributes.
@@ -38,7 +39,7 @@
 
   Drupal.behaviors.filterFilterHtmlUpdating = {
 
-    // The form item containg the "Allowed HTML tags" setting.
+    // The form item contains the "Allowed HTML tags" setting.
     $allowedHTMLFormItem: null,
 
     // The description for the "Allowed HTML tags" field.
@@ -55,7 +56,7 @@
 
     attach: function (context, settings) {
       var that = this;
-      $(context).find('[name="filters[filter_html][settings][allowed_html]"]').once('filter-filter_html-updating', function () {
+      $(context).find('[name="filters[filter_html][settings][allowed_html]"]').once('filter-filter_html-updating').each(function () {
         that.$allowedHTMLFormItem = $(this);
         that.$allowedHTMLDescription = that.$allowedHTMLFormItem.closest('.form-item').find('.description');
         that.userTags = that._parseSetting(this.value);

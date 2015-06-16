@@ -1,4 +1,5 @@
 <?php
+
 /**
  * @file
  * Contains \Drupal\Tests\migrate\Unit\process\MigrationTest.
@@ -6,13 +7,13 @@
 
 namespace Drupal\Tests\migrate\Unit\process;
 
+use Drupal\migrate\MigrateException;
 use Drupal\migrate\Plugin\migrate\process\Migration;
 
 /**
- * Test the Migration process plugin.
+ * Tests the migration process plugin.
  *
  * @coversDefaultClass \Drupal\migrate\Plugin\migrate\process\Migration
- *
  * @group migrate
  */
 class MigrationTest extends MigrateProcessTestCase {
@@ -20,52 +21,65 @@ class MigrationTest extends MigrateProcessTestCase {
   /**
    * {@inheritdoc}
    */
-  public function setUp() {
-    $this->plugin = new TestMigrationTest();
-    $this->migrationConfiguration = array('id' => 'test_migration');
+  protected function setUp() {
+
+    $this->migrationConfiguration = [
+      'id' => 'test',
+      'process' => [],
+      'source' => [],
+    ];
+
     parent::setUp();
   }
 
   /**
-   * Test the no_stub setting.
-   *
-   * @covers ::transform
-   *
+   * Assert that exceptions during import are logged.
    * @expectedException \Drupal\migrate\MigrateSkipRowException
+   * @covers ::transform
    */
-  public function testNoStub() {
+  public function testSaveOnException() {
 
+    // A bunch of mock objects to get thing working
     $migration = $this->getMigration();
-    $this->plugin->migration = $migration;
-
-    $storage = $this->getMock('Drupal\Core\Entity\EntityStorageInterface');
-    $storage->expects($this->any())
+    $migration_source = $this->getMock('\Drupal\migrate\Plugin\MigrateSourceInterface');
+    $migration_source->expects($this->once())
+      ->method('getIds')
+      ->willReturn([]);
+    $migration->expects($this->once())
+      ->method('getSourcePlugin')
+      ->willReturn($migration_source);
+    $migration_destination = $this->getMock('\Drupal\migrate\Plugin\MigrateDestinationInterface');
+    $migration->expects($this->once())
+      ->method('getDestinationPlugin')
+      ->willReturn($migration_destination);
+    $storage = $this->getMock('\Drupal\Core\Entity\EntityStorageInterface');
+    $storage->expects($this->once())
       ->method('loadMultiple')
-      ->willReturn(array($migration, $migration));
-    $this->plugin->setMigrationStorage($storage);
+      ->willReturn([
+        'id' => $migration
+      ]);
+    $manager = $this->getMockBuilder('\Drupal\migrate\Plugin\MigratePluginManager')
+      ->disableOriginalConstructor()
+      ->getMock();
 
-    $this->plugin->setConfiguration(array(
-      'migration' => array('test_migration', 'test_migration2'),
-      'no_stub' => TRUE,
-    ));
+    // Throw an exception during import so we can log it.
+    $migration_destination->expects($this->once())
+      ->method('import')
+      ->willThrowException(new MigrateException());
 
-    $this->plugin->transform('test', $this->migrateExecutable, $this->row, 'test');
-  }
+    // Build our migration plugin.
+    $plugin = new Migration(['migration' => []],
+      'migration', // ?
+      [],
+      $migration,
+      $storage,
+      $manager);
 
+    // Assert that we log exceptions thrown during the import.
+    $this->migrateExecutable->expects($this->once())
+      ->method('saveMessage');
 
-}
-
-class TestMigrationTest extends Migration {
-
-  public function __construct() {
-  }
-
-  public function setConfiguration($configuration) {
-    $this->configuration = $configuration;
-  }
-
-  public function setMigrationStorage($storage) {
-    $this->migrationStorage = $storage;
+    $plugin->transform('value', $this->migrateExecutable, $this->row, 'prop');
   }
 
 }

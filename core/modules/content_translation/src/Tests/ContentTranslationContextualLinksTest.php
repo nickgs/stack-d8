@@ -9,7 +9,6 @@ namespace Drupal\content_translation\Tests;
 
 use Drupal\Component\Serialization\Json;
 use Drupal\language\Entity\ConfigurableLanguage;
-use Drupal\language\Entity\ContentLanguageSettings;
 use Drupal\node\Entity\NodeType;
 use Drupal\simpletest\WebTestBase;
 
@@ -72,20 +71,12 @@ class ContentTranslationContextualLinksTest extends WebTestBase {
     $this->bundle = $this->randomMachineName();
     $this->contentType = $this->drupalCreateContentType(array('type' => $this->bundle));
 
-    // Enable translation for the current entity type and ensure the change is
-    // picked up.
-    \Drupal::service('content_translation.manager')->setEnabled('node', $this->bundle, TRUE);
-    drupal_static_reset();
-    \Drupal::entityManager()->clearCachedBundles();
-    \Drupal::service('router.builder')->rebuild();
-
-    // Add a translatable field to the content type.
+    // Add a field to the content type. The field is not yet translatable.
     entity_create('field_storage_config', array(
       'field_name' => 'field_test_text',
       'entity_type' => 'node',
       'type' => 'text',
       'cardinality' => 1,
-      'translatable' => TRUE,
     ))->save();
     entity_create('field_config', array(
       'entity_type' => 'node',
@@ -100,11 +91,6 @@ class ContentTranslationContextualLinksTest extends WebTestBase {
       ))
       ->save();
 
-    // Enable content translation.
-    ContentLanguageSettings::loadByEntityTypeBundle('node', $this->bundle)
-      ->setLanguageAlterable(TRUE)
-      ->setDefaultLangcode(\Drupal::languageManager()->getDefaultLanguage()->getId())
-      ->save();
     // Create a translator user.
     $permissions = array(
       'access contextual links',
@@ -124,6 +110,18 @@ class ContentTranslationContextualLinksTest extends WebTestBase {
     $this->drupalCreateNode(array('type' => $this->bundle, 'title' => $title, 'langcode' => 'en'));
     $node = $this->drupalGetNodeByTitle($title);
 
+    // Use a UI form submission to make the node type and field translatable.
+    // This tests that caches are properly invalidated.
+    $this->drupalLogin($this->rootUser);
+    $edit = array(
+      'entity_types[node]' => TRUE,
+      'settings[node][' . $this->bundle . '][settings][language][language_alterable]' => TRUE,
+      'settings[node][' . $this->bundle . '][translatable]' => TRUE,
+      'settings[node][' . $this->bundle . '][fields][field_test_text]' => TRUE,
+    );
+    $this->drupalPostForm('admin/config/regional/content-language', $edit, t('Save configuration'));
+    $this->drupalLogout();
+
     // Check that the translate link appears on the node page.
     $this->drupalLogin($this->translator);
     $translate_link = 'node/' . $node->id() . '/translations';
@@ -131,7 +129,7 @@ class ContentTranslationContextualLinksTest extends WebTestBase {
     $response = $this->renderContextualLinks(array('node:node=1:'), 'node/' . $node->id());
     $this->assertResponse(200);
     $json = Json::decode($response);
-    $this->drupalSetContent($json['node:node=1:']);
+    $this->setRawContent($json['node:node=1:']);
     $this->assertLinkByHref($translate_link, 0, 'The contextual link to translate the node is shown.');
 
     // Check that the link leads to the translate page.

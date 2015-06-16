@@ -7,6 +7,7 @@
 
 namespace Drupal\language\Tests;
 
+use Drupal\Core\Url;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\language\Plugin\LanguageNegotiation\LanguageNegotiationBrowser;
 use Drupal\language\Plugin\LanguageNegotiation\LanguageNegotiationSelected;
@@ -19,32 +20,25 @@ use Drupal\Core\Language\Language;
 use Drupal\Core\Language\LanguageInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Drupal\language\LanguageNegotiatorInterface;
+use Drupal\block\Entity\Block;
 
 /**
- * Tests UI language switching.
+ * Tests the language UI for language switching.
  *
- * 1. URL (PATH) > DEFAULT
- *    UI Language base on URL prefix, browser language preference has no
- *    influence:
- *      admin/config
- *        UI in site default language
- *      zh-hans/admin/config
- *        UI in Chinese
- *      blah-blah/admin/config
- *        404
- * 2. URL (PATH) > BROWSER > DEFAULT
- *        admin/config
- *          UI in user's browser language preference if the site has that
- *          language added, if not, the default language
- *        zh-hans/admin/config
- *          UI in Chinese
- *        blah-blah/admin/config
- *          404
- * 3. URL (DOMAIN) > DEFAULT
- *        http://example.com/admin/config
- *          UI language in site default
- *        http://example.cn/admin/config
- *          UI language in Chinese
+ * The uses cases that get tested, are:
+ * - URL (path) > default: Test that the URL prefix setting gets precedence over
+ *   the default language. The browser language preference does not have any
+ *   influence.
+ * - URL (path) > browser > default: Test that the URL prefix setting gets
+ *   precedence over the browser language preference, which in turn gets
+ *   precedence over the default language.
+ * - URL (domain) > default: Tests that the URL domain setting gets precedence
+ *   over the default language.
+ *
+ * The paths that are used for each of these, are:
+ * - admin/config: Tests the UI using the precedence rules.
+ * - zh-hans/admin/config: Tests the UI in Chinese.
+ * - blah-blah/admin/config: Tests the 404 page.
  *
  * @group language
  */
@@ -91,7 +85,7 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
     // be some bug.
     $default_language = \Drupal::languageManager()->getDefaultLanguage();
     ConfigurableLanguage::createFromLangcode($langcode_browser_fallback)->save();
-    $this->config('system.site')->set('langcode', $langcode_browser_fallback)->save();
+    $this->config('system.site')->set('default_langcode', $langcode_browser_fallback)->save();
     ConfigurableLanguage::createFromLangcode($langcode)->save();
 
     // We will look for this string in the admin/config screen to see if the
@@ -104,7 +98,7 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
     // Now the t()'ed string is in db so switch the language back to default.
     // This will rebuild the container so we need to rebuild the container in
     // the test environment.
-    $this->config('system.site')->set('langcode', $default_language->getId())->save();
+    $this->config('system.site')->set('default_langcode', $default_language->getId())->save();
     $this->config('language.negotiation')->set('url.prefixes.en', '')->save();
     $this->rebuildContainer();
 
@@ -273,7 +267,7 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
       'expect' => $language_string,
       'expected_method_id' => LanguageNegotiationUser::METHOD_ID,
       'http_header' => array(),
-      'message' => 'USER > DEFAULT: defined prefereed user language setting, the UI language is based on user setting',
+      'message' => 'USER > DEFAULT: defined preferred user language setting, the UI language is based on user setting',
     );
     $this->runTest($test);
 
@@ -315,7 +309,7 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
       'expect' => $language_string,
       'expected_method_id' => LanguageNegotiationUserAdmin::METHOD_ID,
       'http_header' => array(),
-      'message' => 'USER ADMIN > DEFAULT: defined prefereed user admin language setting, the UI language is based on user setting',
+      'message' => 'USER ADMIN > DEFAULT: defined preferred user admin language setting, the UI language is based on user setting',
     );
     $this->runTest($test);
 
@@ -407,8 +401,8 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
 
     // Check that the language switcher active link matches the given browser
     // language.
-    $args = array(':id' => 'block-test-language-block', ':url' => base_path() . $GLOBALS['script_path'] . $langcode_browser_fallback);
-    $fields = $this->xpath('//div[@id=:id]//a[@class="language-link active" and starts-with(@href, :url)]', $args);
+    $args = array(':id' => 'block-test-language-block', ':url' => \Drupal::url('<front>') . $langcode_browser_fallback);
+    $fields = $this->xpath('//div[@id=:id]//a[@class="language-link is-active" and starts-with(@href, :url)]', $args);
     $this->assertTrue($fields[0] == $languages[$langcode_browser_fallback]->getName(), 'The browser language is the URL active language');
 
     // Check that URLs are rewritten using the given browser language.
@@ -417,7 +411,7 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
   }
 
   /**
-   * Tests _url() when separate domains are used for multiple languages.
+   * Tests URL handling when separate domains are used for multiple languages.
    */
   function testLanguageDomain() {
     global $base_url;
@@ -456,29 +450,37 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
     $this->assertText('The configuration options have been saved', 'Domain configuration is saved.');
     $this->rebuildContainer();
 
+    // Try to use an invalid domain.
+    $edit = [
+      'language_negotiation_url_part' => LanguageNegotiationUrl::CONFIG_DOMAIN,
+      'domain[en]' => $base_url_host,
+      'domain[it]' => 'it.example.com/',
+    ];
+    $this->drupalPostForm('admin/config/regional/language/detection/url', $edit, t('Save configuration'));
+    $this->assertRaw(t('The domain for %language may only contain the domain name, not a trailing slash, protocol and/or port.', ['%language' => 'Italian']));
+
     // Build the link we're going to test.
     $link = 'it.example.com' . rtrim(base_path(), '/') . '/admin';
 
     // Test URL in another language: http://it.example.com/admin.
     // Base path gives problems on the testbot, so $correct_link is hard-coded.
     // @see UrlAlterFunctionalTest::assertUrlOutboundAlter (path.test).
-    $italian_url = _url('admin', array('language' => $languages['it'], 'script' => ''));
+    $italian_url = Url::fromRoute('system.admin', [], ['language' => $languages['it']])->toString();
     $url_scheme = \Drupal::request()->isSecure() ? 'https://' : 'http://';
     $correct_link = $url_scheme . $link;
-    $this->assertEqual($italian_url, $correct_link, format_string('The _url() function returns the right URL (@url) in accordance with the chosen language', array('@url' => $italian_url)));
+    $this->assertEqual($italian_url, $correct_link, format_string('The right URL (@url) in accordance with the chosen language', array('@url' => $italian_url)));
 
     // Test HTTPS via options.
-    $italian_url = _url('admin', array('https' => TRUE, 'language' => $languages['it'], 'script' => ''));
+    $italian_url = Url::fromRoute('system.admin', [], ['https' => TRUE, 'language' => $languages['it']])->toString();
     $correct_link = 'https://' . $link;
-    $this->assertTrue($italian_url == $correct_link, format_string('The _url() function returns the right HTTPS URL (via options) (@url) in accordance with the chosen language', array('@url' => $italian_url)));
+    $this->assertTrue($italian_url == $correct_link, format_string('The right HTTPS URL (via options) (@url) in accordance with the chosen language', array('@url' => $italian_url)));
 
     // Test HTTPS via current URL scheme.
     $request = Request::create('', 'GET', array(), array(), array(), array('HTTPS' => 'on'));
     $this->container->get('request_stack')->push($request);
-    $generator = $this->container->get('url_generator');
-    $italian_url = _url('admin', array('language' => $languages['it'], 'script' => ''));
+    $italian_url = Url::fromRoute('system.admin', [], ['language' => $languages['it']])->toString();
     $correct_link = 'https://' . $link;
-    $this->assertTrue($italian_url == $correct_link, format_string('The _url() function returns the right URL (via current URL scheme) (@url) in accordance with the chosen language', array('@url' => $italian_url)));
+    $this->assertTrue($italian_url == $correct_link, format_string('The right URL (via current URL scheme) (@url) in accordance with the chosen language', array('@url' => $italian_url)));
   }
 
   /**
@@ -501,5 +503,30 @@ class LanguageUILanguageNegotiationTest extends WebTestBase {
     // Ensure configuration was saved.
     $this->assertFalse(array_key_exists('language-url', $config->get('negotiation.language_content.enabled')), 'URL negotiation is not enabled for content.');
     $this->assertTrue(array_key_exists('language-session', $config->get('negotiation.language_content.enabled')), 'Session negotiation is enabled for content.');
+  }
+
+  /**
+   * Tests if the language switcher block gets deleted when a language type has been made not configurable.
+   */
+  public function testDisableLanguageSwitcher() {
+    $block_id = 'test_language_block';
+
+    // Enable the language switcher block.
+    $this->drupalPlaceBlock('language_block:' . LanguageInterface::TYPE_CONTENT, array('id' => $block_id));
+
+    // Check if the language switcher block has been created.
+    $block = Block::load($block_id);
+    $this->assertTrue($block, 'Language switcher block was created.');
+
+    // Make sure language_content is not configurable.
+    $edit = array(
+      'language_content[configurable]' => FALSE,
+    );
+    $this->drupalPostForm('admin/config/regional/language/detection', $edit, t('Save settings'));
+    $this->assertResponse(200);
+
+    // Check if the language switcher block has been removed.
+    $block = Block::load($block_id);
+    $this->assertFalse($block, 'Language switcher block was removed.');
   }
 }

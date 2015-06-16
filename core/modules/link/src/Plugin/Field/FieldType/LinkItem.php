@@ -8,12 +8,14 @@
 namespace Drupal\link\Plugin\Field\FieldType;
 
 use Drupal\Component\Utility\Random;
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemBase;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\Core\TypedData\MapDataDefinition;
+use Drupal\Core\Url;
 use Drupal\link\LinkItemInterface;
 
 /**
@@ -25,7 +27,7 @@ use Drupal\link\LinkItemInterface;
  *   description = @Translation("Stores a URL string, optional varchar link text, and optional blob of attributes to assemble a link."),
  *   default_widget = "link_default",
  *   default_formatter = "link",
- *   constraints = {"LinkType" = {}}
+ *   constraints = {"LinkType" = {}, "LinkAccess" = {}, "LinkExternalProtocols" = {}, "LinkNotExistingInternal" = {}}
  * )
  */
 class LinkItem extends FieldItemBase implements LinkItemInterface {
@@ -44,9 +46,7 @@ class LinkItem extends FieldItemBase implements LinkItemInterface {
    * {@inheritdoc}
    */
   public static function propertyDefinitions(FieldStorageDefinitionInterface $field_definition) {
-    // @todo Change the type from 'string' to 'uri':
-    //   https://www.drupal.org/node/2412509.
-    $properties['uri'] = DataDefinition::create('string')
+    $properties['uri'] = DataDefinition::create('uri')
       ->setLabel(t('URI'));
 
     $properties['title'] = DataDefinition::create('string')
@@ -80,6 +80,9 @@ class LinkItem extends FieldItemBase implements LinkItemInterface {
           'size' => 'big',
           'serialize' => TRUE,
         ),
+      ),
+      'indexes' => array(
+        'uri' => array(array('uri', 30)),
       ),
     );
   }
@@ -153,9 +156,7 @@ class LinkItem extends FieldItemBase implements LinkItemInterface {
    * {@inheritdoc}
    */
   public function isExternal() {
-    // External links don't resolve to a route.
-    $url = \Drupal::pathValidator()->getUrlIfValid($this->uri);
-    return $url->isExternal();
+    return $this->getUrl()->isExternal();
   }
 
   /**
@@ -164,4 +165,26 @@ class LinkItem extends FieldItemBase implements LinkItemInterface {
   public static function mainPropertyName() {
     return 'uri';
   }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getUrl() {
+    return Url::fromUri($this->uri);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setValue($values, $notify = TRUE) {
+    // Unserialize the values.
+    // @todo The storage controller should take care of this, see
+    //   SqlContentEntityStorage::loadFieldItems, see
+    //   https://www.drupal.org/node/2414835
+    if (isset($values['options']) && is_string($values['options'])) {
+      $values['options'] = unserialize($values['options']);
+    }
+    parent::setValue($values, $notify);
+  }
+
 }

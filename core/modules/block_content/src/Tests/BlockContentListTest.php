@@ -7,13 +7,14 @@
 
 namespace Drupal\block_content\Tests;
 
-use Drupal\simpletest\WebTestBase;
-
 /**
  * Tests the listing of custom blocks.
  *
+ * Tests the fallback block content list when Views is disabled.
+ *
  * @group block_content
  * @see \Drupal\block\BlockContentListBuilder
+ * @see \Drupal\block_content\Tests\BlockContentListViewsTest
  */
 class BlockContentListTest extends BlockContentTestBase {
 
@@ -99,7 +100,7 @@ class BlockContentListTest extends BlockContentTestBase {
     $delete_text = t('Delete');
     $this->clickLink($delete_text);
     $this->assertResponse(200);
-    $this->assertTitle(strip_tags(t('Are you sure you want to delete %label?', array('%label' => $new_label)) . ' | Drupal'));
+    $this->assertTitle(strip_tags(t('Are you sure you want to delete the custom block %label?', array('%label' => $new_label)) . ' | Drupal'));
     $this->drupalPostForm(NULL, array(), $delete_text);
 
     // Verify that the text of the label and machine name does not appear in
@@ -107,7 +108,7 @@ class BlockContentListTest extends BlockContentTestBase {
     $this->assertNoFieldByXpath('//td', $new_label, 'No label found for deleted custom block.');
 
     // Confirm that the empty text is displayed.
-    $this->assertText(t('There is no Custom Block yet.'));
+    $this->assertText(t('There is no Custom block yet.'));
   }
 
 }

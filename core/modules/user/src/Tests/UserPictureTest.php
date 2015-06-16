@@ -7,7 +7,6 @@
 
 namespace Drupal\user\Tests;
 
-use Drupal\Core\Cache\Cache;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -27,13 +26,17 @@ class UserPictureTest extends WebTestBase {
    */
   protected $profile = 'standard';
 
-  protected $user;
-  protected $_directory_test;
+  /**
+   * A regular user.
+   *
+   * @var \Drupal\user\UserInterface
+   */
+  protected $webUser;
 
   protected function setUp() {
     parent::setUp();
 
-    $this->web_user = $this->drupalCreateUser(array(
+    $this->webUser = $this->drupalCreateUser(array(
       'access content',
       'access comments',
       'post comments',
@@ -45,7 +48,7 @@ class UserPictureTest extends WebTestBase {
    * Tests creation, display, and deletion of user pictures.
    */
   function testCreateDeletePicture() {
-    $this->drupalLogin($this->web_user);
+    $this->drupalLogin($this->webUser);
 
     // Save a new picture.
     $image = current($this->drupalGetTestFiles('image'));
@@ -57,7 +60,7 @@ class UserPictureTest extends WebTestBase {
 
     // Delete the picture.
     $edit = array();
-    $this->drupalPostForm('user/' . $this->web_user->id() . '/edit', $edit, t('Remove'));
+    $this->drupalPostForm('user/' . $this->webUser->id() . '/edit', $edit, t('Remove'));
     $this->drupalPostForm(NULL, array(), t('Save'));
 
     // Call file_cron() to clean up the file. Make sure the timestamp
@@ -82,7 +85,7 @@ class UserPictureTest extends WebTestBase {
    * Tests embedded users on node pages.
    */
   function testPictureOnNodeComment() {
-    $this->drupalLogin($this->web_user);
+    $this->drupalLogin($this->webUser);
 
     // Save a new picture.
     $image = current($this->drupalGetTestFiles('image'));
@@ -124,10 +127,12 @@ class UserPictureTest extends WebTestBase {
    */
   function saveUserPicture($image) {
     $edit = array('files[user_picture_0]' => drupal_realpath($image->uri));
-    $this->drupalPostForm('user/' . $this->web_user->id() . '/edit', $edit, t('Save'));
+    $this->drupalPostForm('user/' . $this->webUser->id() . '/edit', $edit, t('Save'));
 
     // Load actual user data from database.
-    $account = user_load($this->web_user->id(), TRUE);
+    $user_storage = $this->container->get('entity.manager')->getStorage('user');
+    $user_storage->resetCache(array($this->webUser->id()));
+    $account = $user_storage->load($this->webUser->id());
     return file_load($account->user_picture->target_id, TRUE);
   }
 }

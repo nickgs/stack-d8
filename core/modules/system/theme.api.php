@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Hooks and documentation related to the theme and render system.
+ */
+
+/**
  * @defgroup themeable Theme system overview
  * @{
  * Functions and templates for the user interface that themes can override.
@@ -35,12 +40,13 @@
  * The theme system is invoked in drupal_render() by calling the internal
  * _theme() function, which operates on the concept of "theme hooks". Theme
  * hooks define how a particular type of data should be rendered. They are
- * registered by modules by implenting hook_theme(), which specifies the name of
- * the hook, the input "variables" used to provide data and options, and other
- * information. Modules implementing hook_theme() also need to provide a default
- * implementation for each of their theme hooks, normally in a Twig file, and
- * they may also provide preprocessing functions. For example, the core Search
- * module defines a theme hook for a search result item in search_theme():
+ * registered by modules by implementing hook_theme(), which specifies the name
+ * of the hook, the input "variables" used to provide data and options, and
+ * other information. Modules implementing hook_theme() also need to provide a
+ * default implementation for each of their theme hooks, normally in a Twig
+ * file, and they may also provide preprocessing functions. For example, the
+ * core Search module defines a theme hook for a search result item in
+ * search_theme():
  * @code
  * return array(
  *   'search_result' => array(
@@ -80,7 +86,7 @@
  * template file, a module would provide a default implementation function
  * called theme_HOOK, where HOOK is the name of the theme hook (for example,
  * theme_search_result() would be the name of the function for search result
- * theming). In this case, a theme can override the default implentation by
+ * theming). In this case, a theme can override the default implementation by
  * defining a function called THEME_HOOK() in its THEME.theme file, where THEME
  * is the machine name of the theme (for example, 'bartik' is the machine name
  * of the core Bartik theme, and it would define a function called
@@ -150,6 +156,9 @@
  *   PLUGIN is the machine name of the particular search plugin type that was
  *   used for the search (such as node_search or user_search).
  *
+ * For further information on overriding theme hooks see
+ * https://www.drupal.org/node/2186401
+ *
  * @section sec_alternate_suggestions Altering theme hook suggestions
  * Modules can also alter the theme suggestions provided using the mechanisms
  * of the previous section. There are two hooks for this: the
@@ -159,29 +168,28 @@
  * removing them).
  *
  * @section assets Assets
- *
  * We can distinguish between three types of assets:
- * 1. unconditional page-level assets (loaded on all pages where the theme is in
- *    use): these are defined in the theme's *.info.yml file.
- * 2. conditional page-level assets (loaded on all pages where the theme is in
- *    use and a certain condition is met): these are attached in
- *    hook_page_attachments_alter(), e.g.:
- *    @code
- *    function THEME_page_attachments_alter(array &$page) {
- *      if ($some_condition) {
- *        $page['#attached']['library'][] = 'mytheme/something';
- *      }
- *    }
- *    @endcode
- * 3. template-specific assets (loaded on all pages where a specific template is
- *    in use): these can be added by in preprocessing functions, using @code
- *    $variables['#attached'] @endcode, e.g.:
- *    @code
- *    function THEME_preprocess_menu_local_action(array &$variables) {
- *      // We require Modernizr's touch test for button styling.
- *      $variables['#attached']['library'][] = 'core/modernizr';
- *    }
- *    @endcode
+ * - Unconditional page-level assets (loaded on all pages where the theme is in
+ *   use): these are defined in the theme's *.info.yml file.
+ * - Conditional page-level assets (loaded on all pages where the theme is in
+ *   use and a certain condition is met): these are attached in
+ *   hook_page_attachments_alter(), e.g.:
+ *   @code
+ *   function THEME_page_attachments_alter(array &$page) {
+ *     if ($some_condition) {
+ *       $page['#attached']['library'][] = 'mytheme/something';
+ *     }
+ *   }
+ *   @endcode
+ * - Template-specific assets (loaded on all pages where a specific template is
+ *   in use): these can be added by in preprocessing functions, using @code
+ *   $variables['#attached'] @endcode, e.g.:
+ *   @code
+ *   function THEME_preprocess_menu_local_action(array &$variables) {
+ *     // We require Modernizr's touch test for button styling.
+ *     $variables['#attached']['library'][] = 'core/modernizr';
+ *   }
+ *   @endcode
  *
  * @see hooks
  * @see callbacks
@@ -206,10 +214,11 @@
  * same, which gives users fewer user interface patterns to learn.
  *
  * For further information on the Theme and Render APIs, see:
- * - https://drupal.org/documentation/theme
- * - https://drupal.org/node/722174
- * - https://drupal.org/node/933976
- * - https://drupal.org/node/930760
+ * - https://www.drupal.org/documentation/theme
+ * - https://www.drupal.org/developing/api/8/render
+ * - https://www.drupal.org/node/722174
+ * - https://www.drupal.org/node/933976
+ * - https://www.drupal.org/node/930760
  *
  * @todo Check these links. Some are for Drupal 7, and might need updates for
  *   Drupal 8.
@@ -284,9 +293,56 @@
  * properties. Look through implementations of hook_element_info() to discover
  * elements defined this way.
  *
+ * @section sec_caching Caching
+ * The Drupal rendering process has the ability to cache rendered output at any
+ * level in a render array hierarchy. This allows expensive calculations to be
+ * done infrequently, and speeds up page loading. See the
+ * @link cache Cache API topic @endlink for general information about the cache
+ * system.
+ *
+ * In order to make caching possible, the following information needs to be
+ * present:
+ * - Cache keys: Identifiers for cacheable portions of render arrays. These
+ *   should be created and added for portions of a render array that
+ *   involve expensive calculations in the rendering process.
+ * - Cache contexts: Contexts that may affect rendering, such as user role and
+ *   language. When no context is specified, it means that the render array
+ *   does not vary by any context.
+ * - Cache tags: Tags for data that rendering depends on, such as for
+ *   individual nodes or user accounts, so that when these change the cache
+ *   can be automatically invalidated. If the data consists of entities, you
+ *   can use \Drupal\Core\Entity\EntityInterface::getCacheTags() to generate
+ *   appropriate tags; configuration objects have a similar method.
+ * - Cache max-age: The maximum duration for which a render array may be cached.
+ *   Defaults to \Drupal\Core\Cache\Cache::PERMANENT (permanently cacheable).
+ *
+ * Cache information is provided in the #cache property in a render array. In
+ * this property, always supply the cache contexts, tags, and max-age if a
+ * render array varies by context, depends on some modifiable data, or depends
+ * on information that's only valid for a limited time, respectively. Cache keys
+ * should only be set on the portions of a render array that should be cached.
+ * Contexts are automatically replaced with the value for the current request
+ * (e.g. the current language) and combined with the keys to form a cache ID.
+ * The cache contexts, tags, and max-age will be propagated up the render array
+ * hierarchy to determine cacheability for containing render array sections.
+ *
+ * Here's an example of what a #cache property might contain:
+ * @code
+ *   '#cache' => [
+ *     'keys' => ['entity_view', 'node', $node->id()],
+ *     'contexts' => ['language'],
+ *     'tags' => ['node:' . $node->id()],
+ *     'max-age' => Cache::PERMANENT,
+ *   ],
+ * @endcode
+ *
+ * At the response level, you'll see X-Drupal-Cache-Contexts and
+ * X-Drupal-Cache-Tags headers.
+ *
+ * See https://www.drupal.org/developing/api/8/render/arrays/cacheability for
+ * details.
+ *
  * @section sec_attached Attaching libraries in render arrays
- *
- *
  * Libraries, JavaScript settings, feeds, HTML <head> tags and HTML <head> links
  * are attached to elements using the #attached property. The #attached property
  * is an associative array, where the keys are the attachment types and the
@@ -300,87 +356,56 @@
  * values. Example:
  * @code
  * $build['#attached']['library'][] = 'core/jquery';
- * $build['#attached']['drupalSettings']['foo] = 'bar';
+ * $build['#attached']['drupalSettings']['foo'] = 'bar';
  * $build['#attached']['feed'][] = ['aggregator/rss', $this->t('Feed title')];
  * @endcode
  *
  * See drupal_process_attached() for additional information.
  *
- * @section render_pipeline The Render Pipeline (or: how Drupal renders pages)
+ * See \Drupal\Core\Asset\LibraryDiscoveryParser::parseLibraryInfo() for more
+ * information on how to define libraries.
  *
- * First, you need to know the general routing concepts: please read
- * @ref sec_controller first.
+ * @section render_pipeline The Render Pipeline
+ * The term "render pipeline" refers to the process Drupal uses to take
+ * information provided by modules and render it into a response. For more
+ * details on this process, see https://www.drupal.org/developing/api/8/render;
+ * for background on routing concepts, see @ref sec_controller.
  *
- * Any route that returns the "main content" as a render array automatically has
- * the ability to be requested in multiple ways: it can be rendered in a certain
- * format (HTML, JSON …) and/or in a certain decorated manner (e.g. with blocks
- * around the main content).
+ * There are in fact multiple render pipelines:
+ * - Drupal always uses the Symfony render pipeline. See
+ *   http://symfony.com/doc/2.7/components/http_kernel/introduction.html
+ * - Within the Symfony render pipeline, there is a Drupal render pipeline,
+ *   which handles controllers that return render arrays. (Symfony's render
+ *   pipeline only knows how to deal with Response objects; this pipeline
+ *   converts render arrays into Response objects.) These render arrays are
+ *   considered the main content, and can be rendered into multiple formats:
+ *   HTML, Ajax, dialog, and modal. Modules can add support for more formats, by
+ *   implementing a main content renderer, which is a service tagged with
+ *   'render.main_content_renderer'.
+ * - Finally, within the HTML main content renderer, there is another pipeline,
+ *   to allow for rendering the page containing the main content in multiple
+ *   ways: no decoration at all (just a page showing the main content) or blocks
+ *   (a page with regions, with blocks positioned in regions around the main
+ *   content). Modules can provide additional options, by implementing a page
+ *   variant, which is a plugin annotated with
+ *   \Drupal\Core\Display\Annotation\PageDisplayVariant.
  *
- * After the controller returned a render array, the @code VIEW @endcode event
- * (\Symfony\Component\HttpKernel\KernelEvents::VIEW) will be triggered, because
- * the controller result is not a Response, but a render array.
+ * Routes whose controllers return a \Symfony\Component\HttpFoundation\Response
+ * object are fully handled by the Symfony render pipeline.
  *
- * \Drupal\Core\EventSubscriber\MainContentViewSubscriber is subscribed to the
- * @code VIEW @endcode event. It checks whether the controller result is an
- * array, and if so, guarantees to generate a Response.
- *
- * Next, it checks whether the negotiated request format is supported. Any
- * format for which a main content renderer service exists (an implementation of
- * \Drupal\Core\Render\MainContent\MainContentRendererInterface) is supported.
- *
- * If the negotiated request format is not supported, a 406 JSON response is
- * generated, which lists the supported formats in a machine-readable way(as per
- * RFC 2616, section 10.4.7).
- *
- * Otherwise, when the negotiated request format is supported, the corresponding
- * main content renderer service is initialized. A response is generated by
- * calling \Drupal\Core\Render\MainContent\MainContentRendererInterface::renderResponse()
- * on the service. That's it!
- *
- * Each main content renderer service can choose how to implement its
- * renderResponse() method. It may of course choose to add protected helper
- * methods to provide more structure, if it's a complex main content renderer.
- *
- * The above is the general flow. But let's take a look at the HTML main content
- * renderer (\Drupal\Core\Render\MainContent\HtmlRenderer), because that will be
- * used most often.
- *
- * \Drupal\Core\Render\MainContent\HtmlRenderer::renderResponse() first calls a
- * helper method, @code prepare() @endcode, which takes the main content render
- * array and returns a #type 'page' render array. A #type 'page' render array
- * represents the final <body> for the HTML document (page.html.twig). The
- * remaining task for @code renderResponse() @endcode is to wrap the #type
- * 'page' render array in a #type 'html' render array, which then represents the
- * entire HTML document (html.html.twig).
- * Hence the steps are:
- * 1. \Drupal\Core\Render\MainContent\HtmlRenderer::prepare() takes the main
- *    content render array; if it already is #type 'page', then most of the work
- *    it must do is already done. In the other case, we need to build that #type
- *    'page' render array still. The RenderEvents::SELECT_PAGE_DISPLAY_VARIANT
- *    event is dispatched, to select a page display variant. By default,
- *    \Drupal\Core\Render\Plugin\DisplayVariant\SimplePageVariant is used, which
- *    doesn't apply any decorations. But, when Block module is enabled,
- *    \Drupal\block\Plugin\DisplayVariant\BlockPageVariant is used, which allows
- *    the site builder to place blocks in any of the page regions, and hence
- *    "decorate" the main content.
- * 2. \Drupal\Core\Render\MainContent\HtmlRenderer::prepare() now is guaranteed
- *    to be working on a #type 'page' render array. hook_page_attachments() and
- *    hook_page_attachments_alter() are invoked.
- * 3. \Drupal\Core\Render\MainContent\HtmlRenderer::renderResponse() uses the
- *    #type 'page' render array returned by the previous step and wraps it in
- *    #type 'html'. hook_page_top() and hook_page_bottom() are invoked.
- * 4. drupal_render() is called on the #type 'html' render array, which uses
- *    the html.html.twig template and the return value is a HTML document as a
- *    string.
- * 5. This string of HTML is returned as the Response.
- *
- * For HTML pages to be rendered in limited environments, such as when you are
- * installing or updating Drupal, or when you put it in maintenance mode, or
- * when an error occurs, a simpler HTML page renderer is used for rendering
- * these bare pages: \Drupal\Core\Render\BareHtmlPageRenderer
- *
+ * Routes whose controllers return the "main content" as a render array can be
+ * requested in multiple formats (HTML, JSON, etc.) and/or in a "decorated"
+ * manner, as described above.
  *
  * @see themeable
+ * @see \Symfony\Component\HttpKernel\KernelEvents::VIEW
+ * @see \Drupal\Core\EventSubscriber\MainContentViewSubscriber
+ * @see \Drupal\Core\Render\MainContent\MainContentRendererInterface
+ * @see \Drupal\Core\Render\MainContent\HtmlRenderer
+ * @see \Drupal\Core\Render\RenderEvents::SELECT_PAGE_DISPLAY_VARIANT
+ * @see \Drupal\Core\Render\Plugin\DisplayVariant\SimplePageVariant
+ * @see \Drupal\block\Plugin\DisplayVariant\BlockPageVariant
+ * @see \Drupal\Core\Render\BareHtmlPageRenderer
  *
  * @}
  */
@@ -487,13 +512,12 @@ function hook_preprocess_HOOK(&$variables) {
 /**
  * Provides alternate named suggestions for a specific theme hook.
  *
- * This hook allows the module implementing hook_theme() for a theme hook to
- * provide alternative theme function or template name suggestions. This hook is
- * only invoked for the first module implementing hook_theme() for a theme hook.
+ * This hook allows modules to provide alternative theme function or template
+ * name suggestions.
  *
  * HOOK is the least-specific version of the hook being called. For example, if
- * '#theme' => 'node__article' is called, then node_theme_suggestions_node()
- * will be invoked, not node_theme_suggestions_node__article(). The specific
+ * '#theme' => 'node__article' is called, then hook_theme_suggestions_node()
+ * will be invoked, not hook_theme_suggestions_node__article(). The specific
  * hook called (in this case 'node__article') is available in
  * $variables['theme_hook_original'].
  *
@@ -568,7 +592,7 @@ function hook_theme_suggestions_alter(array &$suggestions, array $variables, $ho
 /**
  * Alters named suggestions for a specific theme hook.
  *
- * This hook allows any module or theme to provide altenative theme function or
+ * This hook allows any module or theme to provide alternative theme function or
  * template name suggestions and reorder or remove suggestions provided by
  * hook_theme_suggestions_HOOK() or by earlier invocations of this hook.
  *
@@ -750,7 +774,9 @@ function hook_library_info_build() {
         'mymodule.zombie.min.js' => [],
       ],
       'css' => [
-        'mymodule.zombie.min.css' => [],
+        'base' => [
+          'mymodule.zombie.min.css' => [],
+        ],
       ],
     ];
   }
@@ -760,7 +786,9 @@ function hook_library_info_build() {
         'mymodule.zombie.js' => [],
       ],
       'css' => [
-        'mymodule.zombie.css' => [],
+        'base' => [
+          'mymodule.zombie.css' => [],
+        ],
       ],
     ];
   }
@@ -776,7 +804,9 @@ function hook_library_info_build() {
         'js/vampire.js' => [],
       ],
       'css' => [
-        'css/vampire.css',
+        'base' => [
+          'css/vampire.css',
+        ],
       ],
       'dependencies' => [
         'core/jquery',
@@ -940,12 +970,8 @@ function hook_page_bottom(array &$page_bottom) {
 /**
  * Register a module or theme's theme implementations.
  *
- * The implementations declared by this hook have several purposes:
- * - They can specify how a particular render array is to be rendered as HTML.
- *   This is usually the case if the theme function is assigned to the render
- *   array's #theme property.
- * - They can return HTML for default calls to _theme().
- * - They can return HTML for calls to _theme() for a theme suggestion.
+ * The implementations declared by this hook specify how a particular render
+ * array is to be rendered as HTML.
  *
  * @param array $existing
  *   An array of existing implementations that may be used for override
@@ -971,19 +997,18 @@ function hook_page_bottom(array &$page_bottom) {
  *
  * @return array
  *   An associative array of information about theme implementations. The keys
- *   on the outer array are known as "theme hooks". For simple theme
- *   implementations for regular calls to _theme(), the theme hook is the first
- *   argument. For theme suggestions, instead of the array key being the base
- *   theme hook, the key is a theme suggestion name with the format
- *   'base_hook_name__sub_hook_name'. For render elements, the key is the
- *   machine name of the render element. The array values are themselves arrays
- *   containing information about the theme hook and its implementation. Each
- *   information array must contain either a 'variables' element (for _theme()
- *   calls) or a 'render element' element (for render elements), but not both.
+ *   on the outer array are known as "theme hooks". For theme suggestions,
+ *   instead of the array key being the base theme hook, the key is a theme
+ *   suggestion name with the format 'base_hook_name__sub_hook_name'.
+ *   For render elements, the key is the machine name of the render element.
+ *   The array values are themselves arrays containing information about the
+ *   theme hook and its implementation. Each information array must contain
+ *   either a 'variables' element (for using a #theme element) or a
+ *   'render element' element (for render elements), but not both.
  *   The following elements may be part of each information array:
- *   - variables: Used for _theme() call items only: an array of variables,
+ *   - variables: Only used for #theme in render array: an array of variables,
  *     where the array keys are the names of the variables, and the array
- *     values are the default values if they are not passed into _theme().
+ *     values are the default values if they are not given in the render array.
  *     Template implementations receive each array key as a variable in the
  *     template file (so they must be legal PHP/Twig variable names). Function
  *     implementations are passed the variables in a single $variables function
@@ -1011,7 +1036,7 @@ function hook_page_bottom(array &$page_bottom) {
  *   - function: If specified, this will be the function name to invoke for
  *     this implementation. If neither 'template' nor 'function' are specified,
  *     a default template name will be assumed. See above for more details.
- *   - base hook: Used for _theme() suggestions only: the base theme hook name.
+ *   - base hook: Used for theme suggestions only: the base theme hook name.
  *     Instead of this suggestion's implementation being used directly, the base
  *     hook will be invoked with this implementation as its first suggestion.
  *     The base hook's files will be included and the base hook's preprocess
@@ -1021,14 +1046,17 @@ function hook_page_bottom(array &$page_bottom) {
  *     suggestion may be used in place of this suggestion. If after
  *     hook_theme_suggestions_HOOK() this suggestion remains the first
  *     suggestion, then this suggestion's function or template will be used to
- *     generate the output for _theme().
+ *     generate the rendered output.
  *   - pattern: A regular expression pattern to be used to allow this theme
  *     implementation to have a dynamic name. The convention is to use __ to
  *     differentiate the dynamic portion of the theme. For example, to allow
  *     forums to be themed individually, the pattern might be: 'forum__'. Then,
- *     when the forum is themed, call:
+ *     when the forum is rendered, following render array can be used:
  *     @code
- *     _theme(array('forum__' . $tid, 'forum'), $forum)
+ *     $render_array = array(
+ *       '#theme' => array('forum__' . $tid, 'forum'),
+ *       '#forum' => $forum,
+ *     );
  *     @endcode
  *   - preprocess functions: A list of functions used to preprocess this data.
  *     Ordinarily this won't be used; it's automatically filled in. By default,
@@ -1048,6 +1076,7 @@ function hook_page_bottom(array &$page_bottom) {
  *   - theme path: (automatically derived) The directory path of the theme or
  *     module, so that it doesn't need to be looked up.
  *
+ * @see themeable
  * @see hook_theme_registry_alter()
  */
 function hook_theme($existing, $type, $theme, $path) {
@@ -1084,17 +1113,22 @@ function hook_theme($existing, $type, $theme, $path) {
  *
  * For example:
  * @code
- * $theme_registry['user'] = array(
- *   'variables' => array(
- *     'account' => NULL,
+ * $theme_registry['block_content_add_list'] = array (
+ *   'template' => 'block-content-add-list',
+ *   'path' => 'core/themes/seven/templates',
+ *   'type' => 'theme_engine',
+ *   'theme path' => 'core/themes/seven',
+ *   'includes' => array (
+ *     0 => 'core/modules/block_content/block_content.pages.inc',
  *   ),
- *   'template' => 'core/modules/user/user',
- *   'file' => 'core/modules/user/user.pages.inc',
- *   'type' => 'module',
- *   'theme path' => 'core/modules/user',
- *   'preprocess functions' => array(
+ *   'variables' => array (
+ *     'content' => NULL,
+ *   ),
+ *   'preprocess functions' => array (
  *     0 => 'template_preprocess',
- *     1 => 'template_preprocess_user_profile',
+ *     1 => 'template_preprocess_block_content_add_list',
+ *     2 => 'contextual_preprocess',
+ *     3 => 'seven_preprocess_block_content_add_list',
  *   ),
  * );
  * @endcode

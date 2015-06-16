@@ -26,7 +26,7 @@ class PreviewTest extends UITestBase {
   /**
    * Tests contextual links in the preview form.
    */
-  protected function testPreviewContextual() {
+  public function testPreviewContextual() {
     \Drupal::service('module_installer')->install(array('contextual'));
     $this->resetAll();
 
@@ -90,6 +90,18 @@ class PreviewTest extends UITestBase {
     $this->drupalPostForm(NULL, array(), t('Update preview'));
     $result = $this->xpath('//div[@id="views-live-preview"]/pre');
     $this->assertTrue(strpos($result[0], '<title>' . $view['page[title]'] . '</title>'), 'The Feed RSS preview was rendered.');
+  }
+
+  /**
+   * Tests the taxonomy term preview AJAX.
+   *
+   * This tests a specific regression in the taxonomy term view preview.
+   *
+   * @see https://www.drupal.org/node/2452659
+   */
+  public function testTaxonomyAJAX() {
+    \Drupal::service('module_installer')->install(array('taxonomy'));
+    $this->getPreviewAJAX('taxonomy_term', 'page_1', 0);
   }
 
   /**
@@ -213,6 +225,9 @@ class PreviewTest extends UITestBase {
     // @see views_ui_test.module
     $elements = $this->xpath('//div[@id="views-live-preview"]/div[contains(@class, views-query-info)]//td[text()=:text]', array(':text' => t('Test row count')));
     $this->assertEqual(count($elements), 1, 'Views Query Preview Info area altered.');
+    // Check that additional assets are attached.
+    $this->assertTrue(strpos($this->getDrupalSettings()['ajaxPageState']['libraries'], 'views_ui_test/views_ui_test.test') !== FALSE, 'Attached library found.');
+    $this->assertRaw('css/views_ui_test.test.css', 'Attached CSS asset found.');
   }
 
   /**

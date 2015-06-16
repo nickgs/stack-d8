@@ -7,7 +7,7 @@
 
 namespace Drupal\taxonomy\Tests;
 
-use Drupal\content_translation\Tests\ContentTranslationUITest;
+use Drupal\content_translation\Tests\ContentTranslationUITestBase;
 use Drupal\Core\Language\LanguageInterface;
 
 /**
@@ -15,7 +15,7 @@ use Drupal\Core\Language\LanguageInterface;
  *
  * @group taxonomy
  */
-class TermTranslationUITest extends ContentTranslationUITest {
+class TermTranslationUITest extends ContentTranslationUITestBase {
 
   /**
    * The vocabulary used for creating terms.
@@ -38,7 +38,7 @@ class TermTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::setupBundle().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::setupBundle().
    */
   protected function setupBundle() {
     parent::setupBundle();
@@ -55,14 +55,14 @@ class TermTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getTranslatorPermission().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getTranslatorPermission().
    */
   protected function getTranslatorPermissions() {
     return array_merge(parent::getTranslatorPermissions(), array('administer taxonomy'));
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getNewEntityValues().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getNewEntityValues().
    */
   protected function getNewEntityValues($langcode) {
     return array('name' => $this->randomMachineName()) + parent::getNewEntityValues($langcode);
@@ -88,7 +88,7 @@ class TermTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::testTranslationUI().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::testTranslationUI().
    */
   public function testTranslationUI() {
     parent::testTranslationUI();
@@ -137,6 +137,29 @@ class TermTranslationUITest extends ContentTranslationUITest {
     $this->assertResponse(200);
     $this->assertLinkByHref('term/' . $untranslatable_tid . '/edit');
     $this->assertNoLinkByHref('term/' . $untranslatable_tid . '/translations');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function doTestTranslationEdit() {
+    $entity = entity_load($this->entityTypeId, $this->entityId, TRUE);
+    $languages = $this->container->get('language_manager')->getLanguages();
+
+    foreach ($this->langcodes as $langcode) {
+      // We only want to test the title for non-english translations.
+      if ($langcode != 'en') {
+        $options = array('language' => $languages[$langcode]);
+        $url = $entity->urlInfo('edit-form', $options);
+        $this->drupalGet($url);
+
+        $title = t('@title [%language translation]', array(
+          '@title' => $entity->getTranslation($langcode)->label(),
+          '%language' => $languages[$langcode]->getName(),
+        ));
+        $this->assertRaw($title);
+      }
+    }
   }
 
 }

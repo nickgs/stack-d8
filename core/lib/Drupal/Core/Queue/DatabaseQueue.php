@@ -8,6 +8,7 @@
 namespace Drupal\Core\Queue;
 
 use Drupal\Core\Database\Connection;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 
 /**
  * Default queue implementation.
@@ -15,6 +16,8 @@ use Drupal\Core\Database\Connection;
  * @ingroup queue
  */
 class DatabaseQueue implements ReliableQueueInterface {
+
+  use DependencySerializationTrait;
 
   /**
    * The name of the queue this instance is working with.
@@ -75,7 +78,7 @@ class DatabaseQueue implements ReliableQueueInterface {
     // until an item is successfully claimed or we are reasonably sure there
     // are no unclaimed items left.
     while (TRUE) {
-      $item = $this->connection->queryRange('SELECT data, created, item_id FROM {queue} q WHERE expire = 0 AND name = :name ORDER BY created ASC', 0, 1, array(':name' => $this->name))->fetchObject();
+      $item = $this->connection->queryRange('SELECT data, created, item_id FROM {queue} q WHERE expire = 0 AND name = :name ORDER BY created, item_id ASC', 0, 1, array(':name' => $this->name))->fetchObject();
       if ($item) {
         // Try to update the item. Only one thread can succeed in UPDATEing the
         // same row. We cannot rely on REQUEST_TIME because items might be

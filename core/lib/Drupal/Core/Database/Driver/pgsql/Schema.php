@@ -7,7 +7,6 @@
 
 namespace Drupal\Core\Database\Driver\pgsql;
 
-use Drupal\Component\Utility\String;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Query\Condition;
@@ -70,7 +69,7 @@ class Schema extends DatabaseSchema {
     $this->maxIdentifierLength = $this->connection->query("SHOW max_identifier_length")->fetchField();
 
     if (strlen($identifierName) > $this->maxIdentifierLength) {
-      $saveIdentifier = 'drupal_' . $this->hashBase64($identifierName) . '_' . $args[2];
+      $saveIdentifier = '"drupal_' . $this->hashBase64($identifierName) . '_' . $args[2] . '"';
     }
     else {
       $saveIdentifier = $identifierName;
@@ -94,7 +93,7 @@ class Schema extends DatabaseSchema {
   public function queryTableInformation($table) {
     // Generate a key to reference this table's information on.
     $key = $this->connection->prefixTables('{' . $table . '}');
-    if (!strpos($key, '.')) {
+    if (strpos($key, '.') === FALSE) {
       $key = 'public.' . $key;
     }
 
@@ -109,11 +108,23 @@ class Schema extends DatabaseSchema {
       $this->connection->addSavepoint();
 
       try {
-        $result = $this->connection->query("SELECT column_name, data_type, column_default FROM information_schema.columns WHERE table_schema = :schema AND table_name = :table AND (data_type = 'bytea' OR (numeric_precision IS NOT NULL AND column_default LIKE :default))", array(
-          ':schema' => $schema,
-          ':table' => $table_name,
-          ':default' => '%nextval%',
-        ));
+        // Check if the table information exists in the PostgreSQL metadata.
+        $table_information_exists = (bool) $this->connection->query("SELECT 1 FROM pg_class WHERE relname = :table", array(':table' => $table_name))->fetchField();
+
+        // If the table information does not yet exist in the PostgreSQL
+        // metadata, then return the default table information here, so that it
+        // will not be cached.
+        if (!$table_information_exists) {
+          $this->connection->releaseSavepoint();
+          return $table_information;
+        }
+        else {
+          $result = $this->connection->query("SELECT column_name, data_type, column_default FROM information_schema.columns WHERE table_schema = :schema AND table_name = :table AND (data_type = 'bytea' OR (numeric_precision IS NOT NULL AND column_default LIKE :default))", array(
+            ':schema' => $schema,
+            ':table' => $table_name,
+            ':default' => '%nextval%',
+          ));
+        }
       }
       catch (\Exception $e) {
         $this->connection->rollbackSavepoint();
@@ -136,6 +147,20 @@ class Schema extends DatabaseSchema {
       $this->tableInformation[$key] = $table_information;
     }
     return $this->tableInformation[$key];
+  }
+
+  /**
+   * Resets information about table blobs, sequences and serial fields.
+   *
+   * @param $table
+   *   The non-prefixed name of the table.
+   */
+  protected function resetTableInformation($table) {
+    $key = $this->connection->prefixTables('{' . $table . '}');
+    if (strpos($key, '.') === FALSE) {
+      $key = 'public.' . $key;
+    }
+    unset($this->tableInformation[$key]);
   }
 
   /**
@@ -197,7 +222,7 @@ class Schema extends DatabaseSchema {
 
     $sql_keys = array();
     if (isset($table['primary key']) && is_array($table['primary key'])) {
-      $sql_keys[] = 'PRIMARY KEY (' . $this->createPrimaryKeySql($table['primary key']) . ')';
+      $sql_keys[] = 'CONSTRAINT ' . $this->ensureIdentifiersLength($name, '', 'pkey') . ' PRIMARY KEY (' . $this->createPrimaryKeySql($table['primary key']) . ')';
     }
     if (isset($table['unique keys']) && is_array($table['unique keys'])) {
       foreach ($table['unique keys'] as $key_name => $key) {
@@ -248,13 +273,14 @@ class Schema extends DatabaseSchema {
    *    The field specification, as per the schema data structure format.
    */
   protected function createFieldSql($name, $spec) {
-    $sql = $name . ' ' . $spec['pgsql_type'];
+    // The PostgreSQL server converts names into lowercase, unless quoted.
+    $sql = '"' . $name . '" ' . $spec['pgsql_type'];
 
     if (isset($spec['type']) && $spec['type'] == 'serial') {
       unset($spec['not null']);
     }
 
-    if (in_array($spec['pgsql_type'], array('varchar', 'character', 'text')) && isset($spec['length'])) {
+    if (in_array($spec['pgsql_type'], array('varchar', 'character')) && isset($spec['length'])) {
       $sql .= '(' . $spec['length'] . ')';
     }
     elseif (isset($spec['precision']) && isset($spec['scale'])) {
@@ -337,6 +363,8 @@ class Schema extends DatabaseSchema {
     // database types back into schema types.
     // $map does not use drupal_static as its value never changes.
     static $map = array(
+      'varchar_ascii:normal' => 'varchar',
+
       'varchar:normal' => 'varchar',
       'char:normal' => 'character',
 
@@ -405,6 +433,15 @@ class Schema extends DatabaseSchema {
     return implode(', ', $return);
   }
 
+  /**
+   * {@inheritdoc}
+   */
+  public function tableExists($table) {
+    $prefixInfo = $this->getPrefixInfo($table, TRUE);
+
+    return (bool) $this->connection->query("SELECT 1 FROM pg_tables WHERE schemaname = :schema AND tablename = :table", array(':schema' => $prefixInfo['schema'], ':table' => $prefixInfo['table']))->fetchField();
+  }
+
   function renameTable($table, $new_name) {
     if (!$this->tableExists($table)) {
       throw new SchemaObjectDoesNotExistException(t("Cannot rename @table to @table_new: table @table doesn't exist.", array('@table' => $table, '@table_new' => $new_name)));
@@ -420,27 +457,43 @@ class Schema extends DatabaseSchema {
     // Index names and constraint names are global in PostgreSQL, so we need to
     // rename them when renaming the table.
     $indexes = $this->connection->query('SELECT indexname FROM pg_indexes WHERE schemaname = :schema AND tablename = :table', array(':schema' => $old_schema, ':table' => $old_table_name));
+
     foreach ($indexes as $index) {
-      if (preg_match('/^' . preg_quote($old_full_name) . '_(.*)$/', $index->indexname, $matches)) {
+      // Get the index type by suffix, e.g. idx/key/pkey
+      $index_type = substr($index->indexname, strrpos($index->indexname, '_') + 1);
+
+      // If the index is already rewritten by ensureIdentifiersLength() to not
+      // exceed the 63 chars limit of PostgreSQL, we need to take care of that.
+      // Example (drupal_Gk7Su_T1jcBHVuvSPeP22_I3Ni4GrVEgTYlIYnBJkro_idx).
+      if (strpos($index->indexname, 'drupal_') !== FALSE) {
+        preg_match('/^drupal_(.*)_' . preg_quote($index_type) . '/', $index->indexname, $matches);
         $index_name = $matches[1];
-        $this->connection->query('ALTER INDEX ' . $index->indexname . ' RENAME TO ' . $this->ensureIdentifiersLength($new_name, $index_name, 'idx'));
       }
+      else {
+        // Make sure to remove the suffix from index names, because
+        // $this->ensureIdentifiersLength() will add the suffix again and thus
+        // would result in a wrong index name.
+        preg_match('/^' . preg_quote($old_full_name) . '__(.*)__' . preg_quote($index_type) . '/', $index->indexname, $matches);
+        $index_name = $matches[1];
+      }
+      $this->connection->query('ALTER INDEX "' . $index->indexname . '" RENAME TO ' . $this->ensureIdentifiersLength($new_name, $index_name, $index_type) . '');
     }
 
-    // Now rename the table.
     // Ensure the new table name does not include schema syntax.
     $prefixInfo = $this->getPrefixInfo($new_name);
-    $this->connection->query('ALTER TABLE {' . $table . '} RENAME TO ' . $prefixInfo['table']);
-  }
 
-  /**
-   * {@inheritdoc}
-   */
-  public function copyTable($source, $destination) {
-    // @TODO The server is likely going to rename indexes and constraints
-    //   during the copy process, and it will not match our
-    //   table_name + constraint name convention anymore.
-    throw new \Exception('Not implemented, see https://drupal.org/node/2061879');
+    // Rename sequences if there's a serial fields.
+    $info = $this->queryTableInformation($table);
+    if (!empty($info->serial_fields)) {
+      foreach ($info->serial_fields as $field) {
+        $old_sequence = $this->prefixNonTable($table, $field, 'seq');
+        $new_sequence = $this->prefixNonTable($new_name, $field, 'seq');
+        $this->connection->query('ALTER SEQUENCE ' . $old_sequence . ' RENAME TO ' . $new_sequence);
+      }
+    }
+    // Now rename the table.
+    $this->connection->query('ALTER TABLE {' . $table . '} RENAME TO ' . $prefixInfo['table']);
+    $this->resetTableInformation($table);
   }
 
   public function dropTable($table) {
@@ -449,6 +502,7 @@ class Schema extends DatabaseSchema {
     }
 
     $this->connection->query('DROP TABLE {' . $table . '}');
+    $this->resetTableInformation($table);
     return TRUE;
   }
 
@@ -483,6 +537,7 @@ class Schema extends DatabaseSchema {
     if (!empty($spec['description'])) {
       $this->connection->query('COMMENT ON COLUMN {' . $table . '}.' . $field . ' IS ' . $this->prepareComment($spec['description']));
     }
+    $this->resetTableInformation($table);
   }
 
   public function dropField($table, $field) {
@@ -491,6 +546,7 @@ class Schema extends DatabaseSchema {
     }
 
     $this->connection->query('ALTER TABLE {' . $table . '} DROP COLUMN "' . $field . '"');
+    $this->resetTableInformation($table);
     return TRUE;
   }
 
@@ -515,6 +571,9 @@ class Schema extends DatabaseSchema {
   public function indexExists($table, $name) {
     // Details http://www.postgresql.org/docs/8.3/interactive/view-pg-indexes.html
     $index_name = $this->ensureIdentifiersLength($table, $name, 'idx');
+    // Remove leading and trailing quotes because the index name is in a WHERE
+    // clause and not used as an identifier.
+    $index_name = str_replace('"', '', $index_name);
     return (bool) $this->connection->query("SELECT 1 FROM pg_indexes WHERE indexname = '$index_name'")->fetchField();
   }
 
@@ -526,8 +585,11 @@ class Schema extends DatabaseSchema {
    * @param $name
    *   The name of the constraint (typically 'pkey' or '[constraint]_key').
    */
-  protected function constraintExists($table, $name) {
+  public function constraintExists($table, $name) {
     $constraint_name = $this->ensureIdentifiersLength($table, $name);
+    // Remove leading and trailing quotes because the index name is in a WHERE
+    // clause and not used as an identifier.
+    $constraint_name = str_replace('"', '', $constraint_name);
     return (bool) $this->connection->query("SELECT 1 FROM pg_constraint WHERE conname = '$constraint_name'")->fetchField();
   }
 
@@ -539,7 +601,8 @@ class Schema extends DatabaseSchema {
       throw new SchemaObjectExistsException(t("Cannot add primary key to table @table: primary key already exists.", array('@table' => $table)));
     }
 
-    $this->connection->query('ALTER TABLE {' . $table . '} ADD PRIMARY KEY (' . $this->createPrimaryKeySql($fields) . ')');
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD CONSTRAINT ' . $this->ensureIdentifiersLength($table, '', 'pkey') . ' PRIMARY KEY (' . $this->createPrimaryKeySql($fields) . ')');
+    $this->resetTableInformation($table);
   }
 
   public function dropPrimaryKey($table) {
@@ -547,7 +610,8 @@ class Schema extends DatabaseSchema {
       return FALSE;
     }
 
-    $this->connection->query('ALTER TABLE {' . $table . '} DROP CONSTRAINT ' . $this->ensureIdentifiersLength($table, 'pkey'));
+    $this->connection->query('ALTER TABLE {' . $table . '} DROP CONSTRAINT ' . $this->ensureIdentifiersLength($table, '', 'pkey'));
+    $this->resetTableInformation($table);
     return TRUE;
   }
 
@@ -555,19 +619,21 @@ class Schema extends DatabaseSchema {
     if (!$this->tableExists($table)) {
       throw new SchemaObjectDoesNotExistException(t("Cannot add unique key @name to table @table: table doesn't exist.", array('@table' => $table, '@name' => $name)));
     }
-    if ($this->constraintExists($table, $name . '_key')) {
+    if ($this->constraintExists($table, $name . '__key')) {
       throw new SchemaObjectExistsException(t("Cannot add unique key @name to table @table: unique key already exists.", array('@table' => $table, '@name' => $name)));
     }
 
-    $this->connection->query('ALTER TABLE {' . $table . '} ADD CONSTRAINT "' . $this->ensureIdentifiersLength($table, $name, 'key') . '" UNIQUE (' . implode(',', $fields) . ')');
+    $this->connection->query('ALTER TABLE {' . $table . '} ADD CONSTRAINT ' . $this->ensureIdentifiersLength($table, $name, 'key') . ' UNIQUE (' . implode(',', $fields) . ')');
+    $this->resetTableInformation($table);
   }
 
   public function dropUniqueKey($table, $name) {
-    if (!$this->constraintExists($table, $name . '_key')) {
+    if (!$this->constraintExists($table, $name . '__key')) {
       return FALSE;
     }
 
-    $this->connection->query('ALTER TABLE {' . $table . '} DROP CONSTRAINT "' . $this->ensureIdentifiersLength($table, $name, 'key') . '"');
+    $this->connection->query('ALTER TABLE {' . $table . '} DROP CONSTRAINT ' . $this->ensureIdentifiersLength($table, $name, 'key'));
+    $this->resetTableInformation($table);
     return TRUE;
   }
 
@@ -580,6 +646,7 @@ class Schema extends DatabaseSchema {
     }
 
     $this->connection->query($this->_createIndexSql($table, $name, $fields));
+    $this->resetTableInformation($table);
   }
 
   public function dropIndex($table, $name) {
@@ -588,6 +655,7 @@ class Schema extends DatabaseSchema {
     }
 
     $this->connection->query('DROP INDEX ' . $this->ensureIdentifiersLength($table, $name, 'idx'));
+    $this->resetTableInformation($table);
     return TRUE;
   }
 
@@ -601,21 +669,21 @@ class Schema extends DatabaseSchema {
 
     $spec = $this->processField($spec);
 
-    // We need to typecast the new column to best be able to transfer the data
-    // Schema_pgsql::getFieldTypeMap() will return possibilities that are not
-    // 'cast-able' such as 'serial' - so they need to be casted int instead.
-    if (in_array($spec['pgsql_type'], array('serial', 'bigserial', 'numeric'))) {
-      $typecast = 'int';
+    // Type 'serial' is known to PostgreSQL, but only during table creation,
+    // not when altering. Because of that, we create it here as an 'int'. After
+    // we create it we manually re-apply the sequence.
+    if (in_array($spec['pgsql_type'], array('serial', 'bigserial'))) {
+      $field_def = 'int';
     }
     else {
-      $typecast = $spec['pgsql_type'];
+      $field_def = $spec['pgsql_type'];
     }
 
     if (in_array($spec['pgsql_type'], array('varchar', 'character', 'text')) && isset($spec['length'])) {
-      $typecast .= '(' . $spec['length'] . ')';
+      $field_def .= '(' . $spec['length'] . ')';
     }
     elseif (isset($spec['precision']) && isset($spec['scale'])) {
-      $typecast .= '(' . $spec['precision'] . ', ' . $spec['scale'] . ')';
+      $field_def .= '(' . $spec['precision'] . ', ' . $spec['scale'] . ')';
     }
 
     // Remove old check constraints.
@@ -633,7 +701,7 @@ class Schema extends DatabaseSchema {
     // the typecast does not work for conversions to bytea.
     // @see http://www.postgresql.org/docs/current/static/datatype-binary.html
     if ($spec['pgsql_type'] != 'bytea') {
-      $this->connection->query('ALTER TABLE {' . $table . '} ALTER "' . $field . '" TYPE ' . $typecast . ' USING "' . $field . '"::' . $typecast);
+      $this->connection->query('ALTER TABLE {' . $table . '} ALTER "' . $field . '" TYPE ' . $field_def . ' USING "' . $field . '"::' . $field_def);
     }
     else {
       // Do not attempt to convert a field that is bytea already.
@@ -642,7 +710,7 @@ class Schema extends DatabaseSchema {
         // Convert to a bytea type by using the SQL replace() function to
         // convert any single backslashes in the field content to double
         // backslashes ('\' to '\\').
-        $this->connection->query('ALTER TABLE {' . $table . '} ALTER "' . $field . '" TYPE ' . $typecast . ' USING decode(replace("' . $field . '"' . ", '\\', '\\\\'), 'escape');");
+        $this->connection->query('ALTER TABLE {' . $table . '} ALTER "' . $field . '" TYPE ' . $field_def . ' USING decode(replace("' . $field . '"' . ", '\\', '\\\\'), 'escape');");
       }
     }
 
@@ -691,10 +759,11 @@ class Schema extends DatabaseSchema {
     if (isset($new_keys)) {
       $this->_createKeys($table, $new_keys);
     }
+    $this->resetTableInformation($table);
   }
 
   protected function _createIndexSql($table, $name, $fields) {
-    $query = 'CREATE INDEX "' . $this->ensureIdentifiersLength($table, $name, 'idx') . '" ON {' . $table . '} (';
+    $query = 'CREATE INDEX ' . $this->ensureIdentifiersLength($table, $name, 'idx') . ' ON {' . $table . '} (';
     $query .= $this->_createKeySql($fields) . ')';
     return $query;
   }

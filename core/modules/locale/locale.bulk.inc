@@ -34,7 +34,7 @@ use Drupal\locale\Locale;
  * @todo
  *   Integrate with update status to identify projects needed and integrate
  *   l10n_update functionality to feed in translation files alike.
- *   See http://drupal.org/node/1191488.
+ *   See https://www.drupal.org/node/1191488.
  */
 function locale_translate_batch_import_files(array $options, $force = FALSE) {
   $options += array(
@@ -165,7 +165,9 @@ function locale_translate_batch_build(array $files, array $options) {
 }
 
 /**
- * Perform interface translation import as a batch step.
+ * Implements callback_batch_operation().
+ *
+ * Perform interface translation import.
  *
  * @param object $file
  *   A file object of the gettext file to be imported. The file object must
@@ -215,7 +217,7 @@ function locale_translate_batch_import($file, array $options, array &$context) {
         // Maximize the progress bar at 95% before completion, the batch API
         // could trigger the end of the operation before file reading is done,
         // because of floating point inaccuracies. See
-        // http://drupal.org/node/1089472
+        // https://www.drupal.org/node/1089472.
         $context['finished'] = min(0.95, $report['seek'] / filesize($file->uri));
         if (isset($options['message'])) {
           $context['message'] = t('!message (@percent%).', array('!message' => $options['message'], '@percent' => (int) ($context['finished'] * 100)));
@@ -262,7 +264,9 @@ function locale_translate_batch_import($file, array $options, array &$context) {
 }
 
 /**
- * Batch callback: Save data of imported files.
+ * Implements callback_batch_operation().
+ *
+ * Save data of imported files.
  *
  * @param array $context
  *   Contains a list of imported files.
@@ -285,7 +289,9 @@ function locale_translate_batch_import_save(array $context) {
 }
 
 /**
- * Refreshs translations after importing strings.
+ * Implements callback_batch_operation().
+ *
+ * Refreshes translations after importing strings.
  *
  * @param array $context
  *   Contains a list of strings updated and information about the progress.
@@ -318,7 +324,7 @@ function locale_translate_batch_refresh(array &$context) {
   }
   elseif ($name = array_shift($context['sandbox']['refresh']['names'])) {
     // Refresh all languages for one object at a time.
-    $count = locale_config_update_multiple(array($name), $context['sandbox']['refresh']['languages']);
+    $count = Locale::config()->updateConfigTranslations(array($name), $context['sandbox']['refresh']['languages']);
     $context['results']['stats']['config'] += $count;
     // Inherit finished information from the "parent" string lookup step so
     // visual display of status will make sense.
@@ -346,6 +352,8 @@ function locale_translate_batch_refresh(array &$context) {
 }
 
 /**
+ * Implements callback_batch_finished().
+ *
  * Finished callback of system page locale import batch.
  *
  * @param bool $success
@@ -452,7 +460,7 @@ function locale_translate_file_attach_properties($file, array $options = array()
   // Extract project, version and language code from the file name. Supported:
   // {project}-{version}.{langcode}.po, {prefix}.{langcode}.po or {langcode}.po
   preg_match('!
-    (                       # project OR project and version OR emtpy (group 1)
+    (                       # project OR project and version OR empty (group 1)
       ([a-z_]+)             # project name (group 2)
       \.                    # .
       |                     # OR
@@ -524,7 +532,7 @@ function locale_translate_delete_translation_files(array $projects = array(), ar
  *   The batch definition.
  */
 function locale_config_batch_update_components(array $options, array $langcodes = array(), array $components = array()) {
-  $langcodes = $langcodes ? $langcodes : array_keys(locale_translatable_language_list());
+  $langcodes = $langcodes ? $langcodes : array_keys(\Drupal::languageManager()->getLanguages());
   if ($langcodes && $names = \Drupal\locale\Locale::config()->getComponentNames($components)) {
     return locale_config_batch_build($names, $langcodes, $options);
   }
@@ -581,7 +589,9 @@ function locale_config_batch_build(array $names, array $langcodes, array $option
 }
 
 /**
- * Performs configuration translation refresh as a batch step.
+ * Implements callback_batch_operation().
+ *
+ * Performs configuration translation refresh.
  *
  * @param array $names
  *   An array of names of configuration objects to update.
@@ -596,7 +606,7 @@ function locale_config_batch_refresh_name(array $names, array $langcodes, array 
   if (!isset($context['result']['stats']['config'])) {
     $context['result']['stats']['config'] = 0;
   }
-  $context['result']['stats']['config'] += locale_config_update_multiple($names, $langcodes);
+  $context['result']['stats']['config'] += Locale::config()->updateConfigTranslations($names, $langcodes);
   foreach ($names as $name) {
     $context['result']['names'][] = $name;
   }
@@ -605,6 +615,8 @@ function locale_config_batch_refresh_name(array $names, array $langcodes, array 
 }
 
 /**
+ * Implements callback_batch_finished().
+ *
  * Finishes callback of system page locale import batch.
  *
  * @param bool $success
@@ -626,42 +638,4 @@ function locale_config_batch_finished($success, array $results) {
       \Drupal::logger('locale')->warning('No configuration objects have been updated.');
     }
   }
-}
-
-/**
- * Updates all configuration for names / languages.
- *
- * @param array $names
- *   Array of names of configuration objects to update.
- * @param array $langcodes
- *   (optional) Array of language codes to update. Defaults to all languages.
- *
- * @return int
- *   Number of configuration objects retranslated.
- */
-function locale_config_update_multiple(array $names, array $langcodes = array()) {
-  /** @var \Drupal\language\ConfigurableLanguageManagerInterface $language_manager */
-  $language_manager = \Drupal::languageManager();
-  $locale_config_manager = Locale::config();
-
-  $langcodes = $langcodes ? $langcodes : array_keys(locale_translatable_language_list());
-  $count = 0;
-  foreach ($names as $name) {
-    $wrapper = $locale_config_manager->get($name);
-    foreach ($langcodes as $langcode) {
-      $translation = $wrapper->getValue() ? $wrapper->getTranslation($langcode)->getValue() : NULL;
-      if ($translation) {
-        $locale_config_manager->saveTranslationData($name, $langcode, $translation);
-        $count++;
-      }
-      else {
-        // Do not bother deleting language overrides which do not exist in the
-        // first place.
-        if (!$language_manager->getLanguageConfigOverride($langcode, $name)->isNew()) {
-          $locale_config_manager->deleteTranslationData($name, $langcode);
-        }
-      }
-    }
-  }
-  return $count;
 }

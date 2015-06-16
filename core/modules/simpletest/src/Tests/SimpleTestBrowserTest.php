@@ -7,6 +7,7 @@
 
 namespace Drupal\simpletest\Tests;
 
+use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -76,8 +77,7 @@ class SimpleTestBrowserTest extends WebTestBase {
     // @see drupal_valid_test_ua()
     // Not using File API; a potential error must trigger a PHP warning.
     unlink($this->siteDirectory . '/.htkey');
-    global $base_url;
-    $this->drupalGet(_url($base_url . '/core/install.php', array('external' => TRUE, 'absolute' => TRUE)));
+    $this->drupalGet(Url::fromUri('base:core/install.php', array('external' => TRUE, 'absolute' => TRUE))->toString());
     $this->assertResponse(403, 'Cannot access install.php.');
   }
 
@@ -121,28 +121,30 @@ class SimpleTestBrowserTest extends WebTestBase {
   }
 
   /**
-   * Tests that PHPUnit and KernalTestBase tests work through the UI.
+   * Tests that PHPUnit and KernelTestBase tests work through the UI.
    */
   public function testTestingThroughUI() {
     // We can not test WebTestBase tests here since they require a valid .htkey
     // to be created. However this scenario is covered by the testception of
     // \Drupal\simpletest\Tests\SimpleTestTest.
 
-    $this->drupalGet('admin/config/development/testing');
-    $edit = array(
-      // A KernalTestBase test.
-      'tests[Drupal\field\Tests\String\StringFormatterTest]' => TRUE,
+    $tests = array(
+      // A KernelTestBase test.
+      'Drupal\system\Tests\DrupalKernel\DrupalKernelTest',
+      // A PHPUnit unit test.
+      'Drupal\Tests\action\Unit\Menu\ActionLocalTasksTest',
+      // A PHPUnit functional test.
+      'Drupal\Tests\simpletest\Functional\BrowserTestBaseTest',
     );
-    $this->drupalPostForm(NULL, $edit, t('Run tests'));
-    $this->assertText('0 fails, 0 exceptions');
 
-    $this->drupalGet('admin/config/development/testing');
-    $edit = array(
-      // A PHPUnit test.
-      'tests[Drupal\Tests\action\Unit\Menu\ActionLocalTasksTest]' => TRUE,
-    );
-    $this->drupalPostForm(NULL, $edit, t('Run tests'));
-    $this->assertText('0 fails, 0 exceptions');
+    foreach ($tests as $test) {
+      $this->drupalGet('admin/config/development/testing');
+      $edit = array(
+        "tests[$test]" => TRUE,
+      );
+      $this->drupalPostForm(NULL, $edit, t('Run tests'));
+      $this->assertText('0 fails, 0 exceptions');
+    }
   }
 
 }

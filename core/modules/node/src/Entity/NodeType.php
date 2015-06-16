@@ -8,7 +8,6 @@
 namespace Drupal\node\Entity;
 
 use Drupal\Core\Config\Entity\ConfigEntityBundleBase;
-use Drupal\Core\Config\Entity\ThirdPartySettingsTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\node\NodeTypeInterface;
 
@@ -38,11 +37,19 @@ use Drupal\node\NodeTypeInterface;
  *     "edit-form" = "/admin/structure/types/manage/{node_type}",
  *     "delete-form" = "/admin/structure/types/manage/{node_type}/delete",
  *     "collection" = "/admin/structure/types",
+ *   },
+ *   config_export = {
+ *     "name",
+ *     "type",
+ *     "description",
+ *     "help",
+ *     "new_revision",
+ *     "preview_mode",
+ *     "display_submitted",
  *   }
  * )
  */
 class NodeType extends ConfigEntityBundleBase implements NodeTypeInterface {
-  use ThirdPartySettingsTrait;
 
   /**
    * The machine name of this node type.
@@ -136,8 +143,8 @@ class NodeType extends ConfigEntityBundleBase implements NodeTypeInterface {
   /**
    * {@inheritdoc}
    */
-  public function setDisplaySubmitted($display_submtited) {
-    $this->display_submitted = $display_submtited;
+  public function setDisplaySubmitted($display_submitted) {
+    $this->display_submitted = $display_submitted;
   }
 
   /**

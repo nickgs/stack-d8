@@ -324,7 +324,6 @@ class SqlContentEntityStorageTest extends UnitTestCase {
       'fields' => array(
         'id' => array(
           'type' => 'serial',
-          'description' => NULL,
           'not null' => TRUE,
         ),
       ),
@@ -644,7 +643,6 @@ class SqlContentEntityStorageTest extends UnitTestCase {
     $expected = array();
     $actual = $mapping->getExtraColumns('entity_test');
     $this->assertEquals($expected, $actual);
-    $expected = array('default_langcode');
     $actual = $mapping->getExtraColumns('entity_test_field_data');
     $this->assertEquals($expected, $actual);
   }
@@ -705,7 +703,6 @@ class SqlContentEntityStorageTest extends UnitTestCase {
     $expected = array();
     $actual = $mapping->getExtraColumns('entity_test');
     $this->assertEquals($expected, $actual);
-    $expected = array('default_langcode');
     $actual = $mapping->getExtraColumns('entity_test_field_data');
     $this->assertEquals($expected, $actual);
   }
@@ -762,13 +759,13 @@ class SqlContentEntityStorageTest extends UnitTestCase {
     );
     $this->assertEquals($expected, $mapping->getTableNames());
 
-    // The language code is not stored on the base table, but on the revision
-    // table.
+    // The default language code is stored on the base table.
     $expected = array_values(array_filter(array(
       $entity_keys['id'],
       $entity_keys['revision'],
       $entity_keys['bundle'],
       $entity_keys['uuid'],
+      $entity_keys['langcode'],
     )));
     $actual = $mapping->getFieldNames('entity_test');
     $this->assertEquals($expected, $actual);
@@ -804,7 +801,6 @@ class SqlContentEntityStorageTest extends UnitTestCase {
     $this->assertEquals($expected, $actual);
     $actual = $mapping->getExtraColumns('entity_test_revision');
     $this->assertEquals($expected, $actual);
-    $expected = array('default_langcode');
     $actual = $mapping->getExtraColumns('entity_test_field_data');
     $this->assertEquals($expected, $actual);
     $actual = $mapping->getExtraColumns('entity_test_field_revision');
@@ -892,13 +888,13 @@ class SqlContentEntityStorageTest extends UnitTestCase {
       );
       $this->assertEquals($expected, $mapping->getTableNames());
 
-      // The language code is not stored on the base table, but on the revision
-      // table.
+      // The default language code is not stored on the base table.
       $expected = array_values(array_filter(array(
         $entity_keys['id'],
         $entity_keys['revision'],
         $entity_keys['bundle'],
         $entity_keys['uuid'],
+        $entity_keys['langcode'],
       )));
       $actual = $mapping->getFieldNames('entity_test');
       $this->assertEquals($expected, $actual);
@@ -934,7 +930,6 @@ class SqlContentEntityStorageTest extends UnitTestCase {
       $this->assertEquals($expected, $actual);
       $actual = $mapping->getExtraColumns('entity_test_revision');
       $this->assertEquals($expected, $actual);
-      $expected = array('default_langcode');
       $actual = $mapping->getExtraColumns('entity_test_field_data');
       $this->assertEquals($expected, $actual);
       $actual = $mapping->getExtraColumns('entity_test_field_revision');

@@ -9,7 +9,7 @@ label: 'Contextual links'
 module: node
 description: ''
 tag: default
-base_table: node
+base_table: node_field_data
 base_field: nid
 core: 8.x
 display:
@@ -49,7 +49,7 @@ display:
           disable_sql_rewrite: false
           distinct: false
           replica: false
-          query_comment: false
+          query_comment: ''
           query_tags: {  }
       row:
         type: 'entity:node'
@@ -68,8 +68,6 @@ display:
       relationships: {  }
       fields: {  }
       arguments: {  }
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default
@@ -84,7 +82,7 @@ display:
           field: nid
           id: nid
           relationship: none
-          table: node
+          table: node_field_data
           plugin_id: numeric
           entity_type: node
           entity_field: nid
@@ -95,8 +93,6 @@ display:
         menu_name: tools
         weight: 0
         context: '1'
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: page
     display_title: Page
     id: page_1

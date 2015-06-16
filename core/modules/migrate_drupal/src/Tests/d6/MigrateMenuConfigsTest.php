@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\config\Tests\SchemaCheckTestTrait;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade variables to menu_ui.settings.yml.
  *
  * @group migrate_drupal
  */
-class MigrateMenuConfigsTest extends MigrateDrupalTestBase {
+class MigrateMenuConfigsTest extends MigrateDrupal6TestBase {
 
   use SchemaCheckTestTrait;
 
@@ -46,7 +46,7 @@ class MigrateMenuConfigsTest extends MigrateDrupalTestBase {
    */
   public function testMenuSettings() {
     $config = $this->config('menu_ui.settings');
-    $this->assertIdentical($config->get('override_parent_selector'), FALSE);
+    $this->assertIdentical(FALSE, $config->get('override_parent_selector'));
     $this->assertConfigSchema(\Drupal::service('config.typed'), 'menu_ui.settings', $config->get());
   }
 

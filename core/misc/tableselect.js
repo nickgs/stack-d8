@@ -5,7 +5,7 @@
   Drupal.behaviors.tableSelect = {
     attach: function (context, settings) {
       // Select the inner-most table in case of nested tables.
-      $(context).find('th.select-all').closest('table').once('table-select', Drupal.tableSelect);
+      $(context).find('th.select-all').closest('table').once('table-select').each(Drupal.tableSelect);
     }
   };
 
@@ -16,7 +16,9 @@
     }
 
     // Keep track of the table, which checkbox is checked and alias the settings.
-    var table = this, checkboxes, lastChecked;
+    var table = this;
+    var checkboxes;
+    var lastChecked;
     var $table = $(table);
     var strings = {'selectAll': Drupal.t('Select all rows in this table'), 'selectNone': Drupal.t('Deselect all rows in this table')};
     var updateSelectAll = function (state) {
@@ -67,11 +69,12 @@
   };
 
   Drupal.tableSelectRange = function (from, to, state) {
-    // We determine the looping mode based on the the order of from and to.
+    // We determine the looping mode based on the order of from and to.
     var mode = from.rowIndex > to.rowIndex ? 'previousSibling' : 'nextSibling';
 
     // Traverse through the sibling nodes.
-    for (var i = from[mode], $i; i; i = i[mode]) {
+    for (var i = from[mode]; i; i = i[mode]) {
+      var $i;
       // Make sure that we're only dealing with elements.
       if (i.nodeType !== 1) {
         continue;

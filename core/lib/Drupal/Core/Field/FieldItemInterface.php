@@ -80,10 +80,10 @@ interface FieldItemInterface extends ComplexDataInterface {
    *     Only columns that appear in the 'columns' array are allowed.
    *   - indexes: (optional) An array of Schema API index definitions. Only
    *     columns that appear in the 'columns' array are allowed. Those indexes
-   *     will be used as default indexes. Callers of field_create_field() can
-   *     specify additional indexes or, at their own risk, modify the default
-   *     indexes specified by the field-type module. Some storage engines might
-   *     not support indexes.
+   *     will be used as default indexes. Field definitions can specify
+   *     additional indexes or, at their own risk, modify the default indexes
+   *     specified by the field-type module. Some storage engines might not
+   *     support indexes.
    *   - foreign keys: (optional) An array of Schema API foreign key
    *     definitions. Note, however, that the field data is not necessarily
    *     stored in SQL. Also, the possible usage is limited, as you cannot
@@ -340,7 +340,7 @@ interface FieldItemInterface extends ComplexDataInterface {
   /**
    * Returns a form for the storage-level settings.
    *
-   * Invoked from \Drupal\field_ui\Form\FieldStorageEditForm to allow
+   * Invoked from \Drupal\field_ui\Form\FieldStorageConfigEditForm to allow
    * administrators to configure storage-level settings.
    *
    * Field storage might reject settings changes that affect the field
@@ -364,7 +364,7 @@ interface FieldItemInterface extends ComplexDataInterface {
   /**
    * Returns a form for the field-level settings.
    *
-   * Invoked from \Drupal\field_ui\Form\FieldEditForm to allow
+   * Invoked from \Drupal\field_ui\Form\FieldConfigEditForm to allow
    * administrators to configure field-level settings.
    *
    * @param array $form
@@ -404,5 +404,21 @@ interface FieldItemInterface extends ComplexDataInterface {
    * @see \Drupal\Core\Config\Entity\ConfigEntityInterface::getConfigDependencyName()
    */
   public static function calculateDependencies(FieldDefinitionInterface $field_definition);
+
+  /**
+   * Informs the plugin that a dependency of the field will be deleted.
+   *
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $field_definition
+   *   The field definition.
+   * @param array $dependencies
+   *   An array of dependencies that will be deleted keyed by dependency type.
+   *   Dependency types are, for example, entity, module and theme.
+   *
+   * @return bool
+   *   TRUE if the field definition has been changed as a result, FALSE if not.
+   *
+   * @see \Drupal\Core\Config\ConfigEntityInterface::onDependencyRemoval()
+   */
+  public static function onDependencyRemoval(FieldDefinitionInterface $field_definition, array $dependencies);
 
 }

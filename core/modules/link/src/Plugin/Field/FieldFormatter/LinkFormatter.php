@@ -7,8 +7,9 @@
 
 namespace Drupal\link\Plugin\Field\FieldFormatter;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\Unicode;
+use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Field\FormatterBase;
@@ -188,8 +189,8 @@ class LinkFormatter extends FormatterBase implements ContainerFactoryPluginInter
 
       // If the title field value is available, use it for the link text.
       if (empty($settings['url_only']) && !empty($item->title)) {
-        // Unsanitized token replacement here because $options['html'] is FALSE
-        // by default in _l().
+        // Unsanitized token replacement here because the entire link title
+        // gets auto-escaped during link generation.
         $link_title = \Drupal::token()->replace($item->title, array($entity->getEntityTypeId() => $entity), array('sanitize' => FALSE, 'clear' => TRUE));
       }
 
@@ -200,14 +201,17 @@ class LinkFormatter extends FormatterBase implements ContainerFactoryPluginInter
 
       if (!empty($settings['url_only']) && !empty($settings['url_plain'])) {
         $element[$delta] = array(
-          '#markup' => String::checkPlain($link_title),
+          '#markup' => SafeMarkup::checkPlain($link_title),
         );
 
         if (!empty($item->_attributes)) {
           // Piggyback on the metadata attributes, which will be placed in the
           // field template wrapper, and set the URL value in a content
           // attribute.
-          $item->_attributes += array('content' => $item->uri);
+          // @todo Does RDF need a URL rather than an internal URI here?
+          // @see \Drupal\rdf\Tests\Field\LinkFieldRdfaTest.
+          $content = str_replace('internal:/', '', $item->uri);
+          $item->_attributes += array('content' => $content);
         }
       }
       else {
@@ -241,9 +245,7 @@ class LinkFormatter extends FormatterBase implements ContainerFactoryPluginInter
    *   An Url object.
    */
   protected function buildUrl(LinkItemInterface $item) {
-    // @todo Consider updating the usage of the path validator with whatever
-    // gets added in https://www.drupal.org/node/2405551.
-    $url = $this->pathValidator->getUrlIfValidWithoutAccessCheck($item->uri) ?: Url::fromRoute('<none>');
+    $url = $item->getUrl() ?: Url::fromRoute('<none>');
 
     $settings = $this->getSettings();
     $options = $item->options;

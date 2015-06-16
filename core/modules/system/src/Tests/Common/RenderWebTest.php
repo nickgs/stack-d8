@@ -7,7 +7,6 @@
 
 namespace Drupal\system\Tests\Common;
 
-use Drupal\Component\Utility\String;
 use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
 
@@ -92,7 +91,7 @@ class RenderWebTest extends WebTestBase {
       '#markup' => $this->randomMachineName(),
     );
     $this->assertRenderedElement($element, '//div[contains(@class, :class) and contains(., :markup)]/label[contains(., :label)]', array(
-      ':class' => 'form-type-item',
+      ':class' => 'js-form-type-item',
       ':markup' => $element['#markup'],
       ':label' => $element['#title'],
     ));
@@ -139,7 +138,7 @@ class RenderWebTest extends WebTestBase {
       '#markup' => $this->randomMachineName(),
     );
     $this->assertRenderedElement($element, '//details/div/div[contains(@class, :class) and contains(., :markup)]', array(
-      ':class' => 'form-type-item',
+      ':class' => 'js-form-type-item',
       ':markup' => $element['item']['#markup'],
     ));
   }
@@ -149,8 +148,8 @@ class RenderWebTest extends WebTestBase {
    */
   protected function assertRenderedElement(array $element, $xpath, array $xpath_args = array()) {
     $original_element = $element;
-    $this->drupalSetContent(drupal_render_root($element));
-    $this->verbose('<hr />' . $this->drupalGetContent());
+    $this->setRawContent(drupal_render_root($element));
+    $this->verbose('<hr />' . $this->getRawContent());
 
     // @see \Drupal\simpletest\WebTestBase::xpath()
     $xpath = $this->buildXPathQuery($xpath, $xpath_args);

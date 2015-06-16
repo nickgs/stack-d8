@@ -46,7 +46,7 @@ abstract class AccountForm extends ContentEntityForm {
    *   The entity manager.
    * @param \Drupal\Core\Language\LanguageManagerInterface $language_manager
    *   The language manager.
-   * @param \Drupal\Core\Entity\Query\QueryFactory
+   * @param \Drupal\Core\Entity\Query\QueryFactory $entity_query
    *   The entity query factory.
    */
   public function __construct(EntityManagerInterface $entity_manager, LanguageManagerInterface $language_manager, QueryFactory $entity_query) {
@@ -74,6 +74,7 @@ abstract class AccountForm extends ContentEntityForm {
     $account = $this->entity;
     $user = $this->currentUser();
     $config = \Drupal::config('user.settings');
+    $form['#cache']['tags'] = $config->getCacheTags();
 
     $language_interface = \Drupal::languageManager()->getCurrentLanguage();
     $register = $account->isAnonymous();
@@ -88,6 +89,7 @@ abstract class AccountForm extends ContentEntityForm {
     // The mail field is NOT required if account originally had no mail set
     // and the user performing the edit has 'administer users' permission.
     // This allows users without email address to be edited and deleted.
+    // Also see \Drupal\user\Plugin\Validation\Constraint\UserMailRequired.
     $form['account']['mail'] = array(
       '#type' => 'email',
       '#title' => $this->t('Email address'),
@@ -152,11 +154,6 @@ abstract class AccountForm extends ContentEntityForm {
 
       // The user must enter their current password to change to a new one.
       if ($user->id() == $account->id()) {
-        $form['account']['current_pass_required_values'] = array(
-          '#type' => 'value',
-          '#value' => $protected_values,
-        );
-
         $form['account']['current_pass'] = array(
           '#type' => 'password',
           '#title' => $this->t('Current password'),
@@ -171,7 +168,6 @@ abstract class AccountForm extends ContentEntityForm {
         );
 
         $form_state->set('user', $account);
-        $form['#validate'][] = 'user_validate_current_pass';
       }
     }
     elseif (!$config->get('verify_mail') || $admin) {
@@ -208,7 +204,7 @@ abstract class AccountForm extends ContentEntityForm {
       '#access' => $admin,
     );
 
-    $roles = array_map(array('\Drupal\Component\Utility\String', 'checkPlain'), user_role_names(TRUE));
+    $roles = array_map(array('\Drupal\Component\Utility\SafeMarkup', 'checkPlain'), user_role_names(TRUE));
 
     $form['account']['roles'] = array(
       '#type' => 'checkboxes',
@@ -219,7 +215,7 @@ abstract class AccountForm extends ContentEntityForm {
     );
 
     // Special handling for the inevitable "Authenticated user" role.
-    $form['account']['roles'][DRUPAL_AUTHENTICATED_RID] = array(
+    $form['account']['roles'][RoleInterface::AUTHENTICATED_ID] = array(
       '#default_value' => TRUE,
       '#disabled' => TRUE,
     );
@@ -229,29 +225,6 @@ abstract class AccountForm extends ContentEntityForm {
       '#title' => $this->t('Notify user of new account'),
       '#access' => $register && $admin,
     );
-
-    // Signature.
-    $form['signature_settings'] = array(
-      '#type' => 'details',
-      '#title' => $this->t('Signature settings'),
-      '#open' => TRUE,
-      '#weight' => 1,
-      '#access' => (!$register && $config->get('signatures')),
-    );
-    // While the details group will simply not be rendered if empty, the actual
-    // signature element cannot use #access, since #type 'text_format' is not
-    // available when Filter module is not installed. If the user account has an
-    // existing signature value and format, then the existing field values will
-    // just be re-saved to the database in case of an entity update.
-    if ($this->moduleHandler->moduleExists('filter')) {
-      $form['signature_settings']['signature'] = array(
-        '#type' => 'text_format',
-        '#title' => $this->t('Signature'),
-        '#default_value' => $account->getSignature(),
-        '#description' => $this->t('Your signature will be publicly displayed at the end of your comments.'),
-        '#format' => $account->getSignatureFormat(),
-      );
-    }
 
     $user_preferred_langcode = $register ? $language_interface->getId() : $account->getPreferredLangcode();
 
@@ -343,7 +316,7 @@ abstract class AccountForm extends ContentEntityForm {
    *   The current state of the form.
    */
   public function syncUserLangcode($entity_type_id, UserInterface $user, array &$form, FormStateInterface &$form_state) {
-    $user->langcode = $user->preferred_langcode;
+    $user->getUntranslated()->langcode = $user->preferred_langcode;
   }
 
   /**
@@ -359,74 +332,56 @@ abstract class AccountForm extends ContentEntityForm {
     if (is_string(key($form_state->getValue('roles')))) {
       $form_state->setValue('roles', array_keys(array_filter($form_state->getValue('roles'))));
     }
-    return parent::buildEntity($form, $form_state);
+
+    /** @var \Drupal\user\UserInterface $account */
+    $account = parent::buildEntity($form, $form_state);
+
+    // Translate the empty value '' of language selects to an unset field.
+    foreach (array('preferred_langcode', 'preferred_admin_langcode') as $field_name) {
+      if ($form_state->getValue($field_name) === '') {
+        $account->$field_name = NULL;
+      }
+    }
+
+    // Set existing password if set in the form state.
+    if ($current_pass = $form_state->getValue('current_pass')) {
+      $account->setExistingPassword($current_pass);
+    }
+
+    return $account;
   }
 
   /**
    * {@inheritdoc}
    */
   public function validate(array $form, FormStateInterface $form_state) {
-    parent::validate($form, $form_state);
+    /** @var \Drupal\user\UserInterface $account */
+    $account = parent::validate($form, $form_state);
 
-    $account = $this->entity;
-    // Validate new or changing username.
-    if ($form_state->hasValue('name')) {
-      if ($error = user_validate_name($form_state->getValue('name'))) {
-        $form_state->setErrorByName('name', $error);
-      }
-      // Cast the user ID as an integer. It might have been set to NULL, which
-      // could lead to unexpected results.
-      else {
-        $name_taken = (bool) $this->entityQuery->get('user')
-          ->condition('uid', (int) $account->id(), '<>')
-          ->condition('name', $form_state->getValue('name'))
-          ->range(0, 1)
-          ->count()
-          ->execute();
+    // Skip the protected user field constraint if the user came from the
+    // password recovery page.
+    $account->_skipProtectedUserFieldConstraint = $form_state->get('user_pass_reset');
 
-        if ($name_taken) {
-          $form_state->setErrorByName('name', $this->t('The username %name is already taken.', array('%name' => $form_state->getValue('name'))));
-        }
-      }
-    }
-
-    $mail = $form_state->getValue('mail');
-
-    if (!empty($mail)) {
-      $mail_taken = (bool) $this->entityQuery->get('user')
-        ->condition('uid', (int) $account->id(), '<>')
-        ->condition('mail', $mail)
-        ->range(0, 1)
-        ->count()
-        ->execute();
-
-      if ($mail_taken) {
-        // Format error message dependent on whether the user is logged in or not.
-        if (\Drupal::currentUser()->isAuthenticated()) {
-          $form_state->setErrorByName('mail', $this->t('The email address %email is already taken.', array('%email' => $mail)));
-        }
-        else {
-          $form_state->setErrorByName('mail', $this->t('The email address %email is already registered. <a href="@password">Have you forgotten your password?</a>', array('%email' => $mail, '@password' => $this->url('user.pass'))));
-        }
+    // Customly trigger validation of manually added fields and add in
+    // violations. This is necessary as entity form displays only invoke entity
+    // validation for fields contained in the display.
+    $field_names = array(
+      'name',
+      'pass',
+      'mail',
+      'timezone',
+      'langcode',
+      'preferred_langcode',
+      'preferred_admin_langcode'
+    );
+    foreach ($field_names as $field_name) {
+      $violations = $account->$field_name->validate();
+      foreach ($violations as $violation) {
+        $form_state->setErrorByName($field_name, $violation->getMessage());
       }
     }
 
-    // Make sure the signature isn't longer than the size of the database field.
-    // Signatures are disabled by default, so make sure it exists first.
-    if ($signature = $form_state->getValue('signature')) {
-      // Move text format for user signature into 'signature_format'.
-      $form_state->setValue('signature_format', $signature['format']);
-      // Move text value for user signature into 'signature'.
-      $form_state->setValue('signature', $signature['value']);
-
-      // @todo Make the user signature field use a widget to benefit from
-      //   automatic typed data validation in https://drupal.org/node/2227381.
-      $field_definitions = $this->entityManager->getFieldDefinitions('user', $this->getEntity()->bundle());
-      $max_length = $field_definitions['signature']->getSetting('max_length');
-      if (Unicode::strlen($form_state->getValue('signature')) > $max_length) {
-        $form_state->setErrorByName('signature', $this->t('The signature is too long: it must be %max characters or less.', array('%max' => $max_length)));
-      }
-    }
+    return $account;
   }
 
   /**

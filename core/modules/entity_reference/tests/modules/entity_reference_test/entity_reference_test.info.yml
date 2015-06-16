@@ -6,3 +6,7 @@ package: Testing
 version: VERSION
 dependencies:
   - entity_reference
+  - node
+  - user
+  - views
+  - entity_test

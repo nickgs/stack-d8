@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\config\Tests\SchemaCheckTestTrait;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade variables to action.settings.yml.
  *
  * @group migrate_drupal
  */
-class MigrateActionConfigsTest extends MigrateDrupalTestBase {
+class MigrateActionConfigsTest extends MigrateDrupal6TestBase {
 
   use SchemaCheckTestTrait;
 
@@ -46,7 +46,7 @@ class MigrateActionConfigsTest extends MigrateDrupalTestBase {
    */
   public function testActionSettings() {
     $config = $this->config('action.settings');
-    $this->assertIdentical($config->get('recursion_limit'), 35);
+    $this->assertIdentical(35, $config->get('recursion_limit'));
     $this->assertConfigSchema(\Drupal::service('config.typed'), 'action.settings', $config->get());
   }
 

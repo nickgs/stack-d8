@@ -38,13 +38,15 @@ use Symfony\Component\ExpressionLanguage\ExpressionFunctionProviderInterface;
 class PhpDumper extends Dumper
 {
     /**
-     * Characters that might appear in the generated variable name as first character
+     * Characters that might appear in the generated variable name as first character.
+     *
      * @var string
      */
     const FIRST_CHARS = 'abcdefghijklmnopqrstuvwxyz';
 
     /**
-     * Characters that might appear in the generated variable name as any but the first character
+     * Characters that might appear in the generated variable name as any but the first character.
+     *
      * @var string
      */
     const NON_FIRST_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789_';
@@ -115,17 +117,19 @@ class PhpDumper extends Dumper
         ), $options);
 
         if (!empty($options['file']) && is_dir($dir = dirname($options['file']))) {
-            // Build a regexp where the first two root dirs are mandatory,
+            // Build a regexp where the first root dirs are mandatory,
             // but every other sub-dir is optional up to the full path in $dir
+            // Mandate at least 2 root dirs and not more that 5 optional dirs.
 
             $dir = explode(DIRECTORY_SEPARATOR, realpath($dir));
             $i = count($dir);
 
             if (3 <= $i) {
                 $regex = '';
-                $this->targetDirMaxMatches = $i - 3;
+                $lastOptionalDir = $i > 8 ? $i - 5 : 3;
+                $this->targetDirMaxMatches = $i - $lastOptionalDir;
 
-                while (2 < --$i) {
+                while (--$i >= $lastOptionalDir) {
                     $regex = sprintf('(%s%s)?', preg_quote(DIRECTORY_SEPARATOR.$dir[$i], '#'), $regex);
                 }
 
@@ -223,7 +227,7 @@ class PhpDumper extends Dumper
     }
 
     /**
-     * Generates code for the proxies to be attached after the container class
+     * Generates code for the proxies to be attached after the container class.
      *
      * @return string
      */
@@ -505,7 +509,7 @@ class PhpDumper extends Dumper
     }
 
     /**
-     * Adds configurator definition
+     * Adds configurator definition.
      *
      * @param string     $id
      * @param Definition $definition
@@ -538,7 +542,7 @@ class PhpDumper extends Dumper
     }
 
     /**
-     * Adds a service
+     * Adds a service.
      *
      * @param string     $id
      * @param Definition $definition
@@ -556,7 +560,7 @@ class PhpDumper extends Dumper
         if ($definition->isSynthetic()) {
             $return[] = '@throws RuntimeException always since this service is expected to be injected dynamically';
         } elseif ($class = $definition->getClass()) {
-            $return[] = sprintf("@return %s A %s instance.", 0 === strpos($class, '%') ? 'object' : "\\".$class, $class);
+            $return[] = sprintf('@return %s A %s instance.', 0 === strpos($class, '%') ? 'object' : "\\".$class, $class);
         } elseif ($definition->getFactory()) {
             $factory = $definition->getFactory();
             if (is_string($factory)) {
@@ -662,7 +666,7 @@ EOF;
     }
 
     /**
-     * Adds multiple services
+     * Adds multiple services.
      *
      * @return string
      */
@@ -816,7 +820,7 @@ use Symfony\Component\DependencyInjection\Exception\RuntimeException;
 $bagClass
 
 /**
- * $class
+ * $class.
  *
  * This class has been auto-generated
  * by the Symfony Dependency Injection Component.
@@ -824,6 +828,7 @@ $bagClass
 class $class extends $baseClass
 {
     private \$parameters;
+    private \$targetDirs = array();
 
 EOF;
     }
@@ -835,7 +840,8 @@ EOF;
      */
     private function addConstructor()
     {
-        $parameters = $this->exportParameters($this->container->getParameterBag()->all());
+        $targetDirs = $this->exportTargetDirs();
+        $arguments = $this->container->getParameterBag()->all() ? 'new ParameterBag($this->getDefaultParameters())' : null;
 
         $code = <<<EOF
 
@@ -843,10 +849,8 @@ EOF;
      * Constructor.
      */
     public function __construct()
-    {
-        \$this->parameters = $parameters;
-
-        parent::__construct(new ParameterBag(\$this->parameters));
+    {{$targetDirs}
+        parent::__construct($arguments);
 
 EOF;
 
@@ -874,7 +878,7 @@ EOF;
      */
     private function addFrozenConstructor()
     {
-        $parameters = $this->exportParameters($this->container->getParameterBag()->all());
+        $targetDirs = $this->exportTargetDirs();
 
         $code = <<<EOF
 
@@ -882,11 +886,18 @@ EOF;
      * Constructor.
      */
     public function __construct()
-    {
+    {{$targetDirs}
+EOF;
+
+        if ($this->container->getParameterBag()->all()) {
+            $code .= "\n        \$this->parameters = \$this->getDefaultParameters();\n";
+        }
+
+        $code .= <<<EOF
+
         \$this->services =
         \$this->scopedServices =
         \$this->scopeStacks = array();
-        \$this->parameters = $parameters;
 
         \$this->set('service_container', \$this);
 
@@ -933,7 +944,7 @@ EOF;
     }
 
     /**
-     * Adds the methodMap property definition
+     * Adds the methodMap property definition.
      *
      * @return string
      */
@@ -953,7 +964,7 @@ EOF;
     }
 
     /**
-     * Adds the aliases property definition
+     * Adds the aliases property definition.
      *
      * @return string
      */
@@ -990,6 +1001,8 @@ EOF;
         if (!$this->container->getParameterBag()->all()) {
             return '';
         }
+
+        $parameters = $this->exportParameters($this->container->getParameterBag()->all());
 
         $code = '';
         if ($this->container->isFrozen()) {
@@ -1041,6 +1054,20 @@ EOF;
 
 EOF;
         }
+
+        $code .= <<<EOF
+
+    /**
+     * Gets the default parameters.
+     *
+     * @return array An array of the default parameters
+     */
+    protected function getDefaultParameters()
+    {
+        return $parameters;
+    }
+
+EOF;
 
         return $code;
     }
@@ -1142,7 +1169,7 @@ EOF;
                     $behavior[$id] = $argument->getInvalidBehavior();
                 }
 
-                $calls[$id] += 1;
+                ++$calls[$id];
             }
         }
     }
@@ -1208,7 +1235,7 @@ EOF;
      *
      * @return bool
      */
-    private function hasReference($id, array $arguments, $deep = false, array $visited = array())
+    private function hasReference($id, array $arguments, $deep = false, array &$visited = array())
     {
         foreach ($arguments as $argument) {
             if (is_array($argument)) {
@@ -1305,7 +1332,9 @@ EOF;
                 if (null !== $value->getFactoryClass()) {
                     return sprintf("call_user_func(array(%s, '%s')%s)", $this->dumpValue($value->getFactoryClass()), $value->getFactoryMethod(), count($arguments) > 0 ? ', '.implode(', ', $arguments) : '');
                 } elseif (null !== $value->getFactoryService()) {
-                    return sprintf("%s->%s(%s)", $this->getServiceCall($value->getFactoryService()), $value->getFactoryMethod(), implode(', ', $arguments));
+                    $service = $this->dumpValue($value->getFactoryService());
+
+                    return sprintf('%s->%s(%s)', 0 === strpos($service, '$') ? sprintf('$this->get(%s)', $service) : $this->getServiceCall($value->getFactoryService()), $value->getFactoryMethod(), implode(', ', $arguments));
                 } else {
                     throw new RuntimeException('Cannot dump definitions which have factory method without factory service or factory class.');
                 }
@@ -1359,7 +1388,7 @@ EOF;
     }
 
     /**
-     * Dumps a parameter
+     * Dumps a parameter.
      *
      * @param string $name
      *
@@ -1374,13 +1403,18 @@ EOF;
         return sprintf("\$this->getParameter('%s')", strtolower($name));
     }
 
+    /**
+     * @deprecated Deprecated since 2.6.2, to be removed in 3.0. Use Symfony\Component\DependencyInjection\ContainerBuilder::addExpressionLanguageProvider instead.
+     *
+     * @param ExpressionFunctionProviderInterface $provider
+     */
     public function addExpressionLanguageProvider(ExpressionFunctionProviderInterface $provider)
     {
         $this->expressionLanguageProviders[] = $provider;
     }
 
     /**
-     * Gets a service call
+     * Gets a service call.
      *
      * @param string    $id
      * @param Reference $reference
@@ -1425,7 +1459,7 @@ EOF;
     }
 
     /**
-     * Returns the next name to use
+     * Returns the next name to use.
      *
      * @return string
      */
@@ -1441,17 +1475,17 @@ EOF;
             $i = $this->variableCount;
 
             if ('' === $name) {
-                $name .= $firstChars[$i%$firstCharsLength];
-                $i = intval($i/$firstCharsLength);
+                $name .= $firstChars[$i % $firstCharsLength];
+                $i = (int) ($i / $firstCharsLength);
             }
 
             while ($i > 0) {
-                $i -= 1;
-                $name .= $nonFirstChars[$i%$nonFirstCharsLength];
-                $i = intval($i/$nonFirstCharsLength);
+                --$i;
+                $name .= $nonFirstChars[$i % $nonFirstCharsLength];
+                $i = (int) ($i / $nonFirstCharsLength);
             }
 
-            $this->variableCount += 1;
+            ++$this->variableCount;
 
             // check that the name is not reserved
             if (in_array($name, $this->reservedVariables, true)) {
@@ -1468,10 +1502,28 @@ EOF;
             if (!class_exists('Symfony\Component\ExpressionLanguage\ExpressionLanguage')) {
                 throw new RuntimeException('Unable to use expressions as the Symfony ExpressionLanguage component is not installed.');
             }
-            $this->expressionLanguage = new ExpressionLanguage(null, $this->expressionLanguageProviders);
+            $providers = array_merge($this->container->getExpressionLanguageProviders(), $this->expressionLanguageProviders);
+            $this->expressionLanguage = new ExpressionLanguage(null, $providers);
+
+            if ($this->container->isTrackingResources()) {
+                foreach ($providers as $provider) {
+                    $this->container->addObjectResource($provider);
+                }
+            }
         }
 
         return $this->expressionLanguage;
+    }
+
+    private function exportTargetDirs()
+    {
+        return null === $this->targetDirRegex ? '' : <<<EOF
+
+        \$dir = __DIR__;
+        for (\$i = 1; \$i <= {$this->targetDirMaxMatches}; ++\$i) {
+            \$this->targetDirs[\$i] = \$dir = dirname(\$dir);
+        }
+EOF;
     }
 
     private function export($value)
@@ -1482,8 +1534,8 @@ EOF;
             $suffix = isset($value[$suffix]) ? '.'.var_export(substr($value, $suffix), true) : '';
             $dirname = '__DIR__';
 
-            for ($i = $this->targetDirMaxMatches - count($matches); 0 <= $i; --$i) {
-                $dirname = sprintf('dirname(%s)', $dirname);
+            if (0 < $offset = 1 + $this->targetDirMaxMatches - count($matches)) {
+                $dirname = sprintf('$this->targetDirs[%d]', $offset);
             }
 
             if ($prefix || $suffix) {

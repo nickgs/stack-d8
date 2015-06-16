@@ -31,6 +31,7 @@ class FieldImportChangeTest extends FieldUnitTestBase {
    * Tests importing an updated field.
    */
   function testImportChange() {
+    $this->installConfig(['field_test_config']);
     $field_storage_id = 'field_test_import';
     $field_id = "entity_test.entity_test.$field_storage_id";
     $field_config_name = "field.field.$field_id";
@@ -39,7 +40,7 @@ class FieldImportChangeTest extends FieldUnitTestBase {
     $staging = $this->container->get('config.storage.staging');
     $this->copyConfig($active, $staging);
 
-    // Save as files in the the staging directory.
+    // Save as files in the staging directory.
     $field = $active->read($field_config_name);
     $new_label = 'Test update import field';
     $field['label'] = $new_label;

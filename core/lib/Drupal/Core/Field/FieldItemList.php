@@ -43,13 +43,8 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
   /**
    * {@inheritdoc}
    */
-  public function __construct(DataDefinitionInterface $definition, $name = NULL, TypedDataInterface $parent = NULL) {
-    parent::__construct($definition, $name, $parent);
-    // Always initialize one empty item as most times a value for at least one
-    // item will be present. That way prototypes created by
-    // \Drupal\Core\TypedData\TypedDataManager::getPropertyInstance() will
-    // already have this field item ready for use after cloning.
-    $this->list[0] = $this->createItem(0);
+  protected function createItem($offset = 0, $value = NULL) {
+    return \Drupal::service('plugin.manager.field.field_type')->createFieldItem($this, $offset, $value);
   }
 
   /**
@@ -103,6 +98,7 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
     $this->filter(function ($item) {
       return !$item->isEmpty();
     });
+    return $this;
   }
 
   /**
@@ -133,28 +129,39 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
    * {@inheritdoc}
    */
   public function __get($property_name) {
-    return $this->first()->__get($property_name);
+    // For empty fields, $entity->field->property is NULL.
+    if ($item = $this->first()) {
+      return $item->__get($property_name);
+    }
   }
 
   /**
    * {@inheritdoc}
    */
   public function __set($property_name, $value) {
-    $this->first()->__set($property_name, $value);
+    // For empty fields, $entity->field->property = $value automatically
+    // creates the item before assigning the value.
+    $item = $this->first() ?: $this->appendItem();
+    $item->__set($property_name, $value);
   }
 
   /**
    * {@inheritdoc}
    */
   public function __isset($property_name) {
-    return $this->first()->__isset($property_name);
+    if ($item = $this->first()) {
+      return $item->__isset($property_name);
+    }
+    return FALSE;
   }
 
   /**
    * {@inheritdoc}
    */
   public function __unset($property_name) {
-    return $this->first()->__unset($property_name);
+    if ($item = $this->first()) {
+      $item->__unset($property_name);
+    }
   }
 
   /**
@@ -177,16 +184,17 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
    * {@inheritdoc}
    */
   public function applyDefaultValue($notify = TRUE) {
-    $value = $this->getFieldDefinition()->getDefaultValue($this->getEntity());
-
-    // NULL or array() mean "no default value", but  0, '0' and the empty string
-    // are valid default values.
-    if (!isset($value) || (is_array($value) && empty($value))) {
-      // Create one field item and apply defaults.
-      $this->first()->applyDefaultValue(FALSE);
+    if ($value = $this->getFieldDefinition()->getDefaultValue($this->getEntity())) {
+      $this->setValue($value, $notify);
     }
     else {
-      $this->setValue($value, $notify);
+      // Create one field item and give it a chance to apply its defaults.
+      // Remove it if this ended up doing nothing.
+      // @todo Having to create an item in case it wants to set a value is
+      // absurd. Remove that in https://www.drupal.org/node/2356623.
+      $item = $this->first() ?: $this->appendItem();
+      $item->applyDefaultValue(FALSE);
+      $this->filterEmptyItems();
     }
     return $this;
   }
@@ -306,7 +314,7 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
     $widget->extractFormValues($this, $element, $form_state);
     // Force a non-required field definition.
     // @see self::defaultValueWidget().
-    $this->definition->required = FALSE;
+    $this->getFieldDefinition()->setRequired(FALSE);
     $violations = $this->validate();
 
     // Assign reported errors to the correct form element.
@@ -346,8 +354,9 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
       $entity = $this->getEntity();
 
       // Force a non-required widget.
-      $this->getFieldDefinition()->required = FALSE;
-      $this->getFieldDefinition()->description = '';
+      $definition = $this->getFieldDefinition();
+      $definition->setRequired(FALSE);
+      $definition->setDescription('');
 
       // Use the widget currently configured for the 'default' form mode, or
       // fallback to the default widget for the field type.
@@ -361,6 +370,40 @@ class FieldItemList extends ItemList implements FieldItemListInterface {
     }
 
     return $form_state->get('default_value_widget');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function equals(FieldItemListInterface $list_to_compare) {
+    $columns = $this->getFieldDefinition()->getFieldStorageDefinition()->getColumns();
+    $count1 = count($this);
+    $count2 = count($list_to_compare);
+    if ($count1 === 0 && $count2 === 0) {
+      // Both are empty we can safely assume that it did not change.
+      return TRUE;
+    }
+    if ($count1 !== $count2) {
+      // One of them is empty but not the other one so the value changed.
+      return FALSE;
+    }
+    $value1 = $this->getValue();
+    $value2 = $list_to_compare->getValue();
+    if ($value1 === $value2) {
+      return TRUE;
+    }
+    // If the values are not equal ensure a consistent order of field item
+    // properties and remove properties which will not be saved.
+    $callback = function (&$value) use ($columns) {
+      if (is_array($value)) {
+        $value = array_intersect_key($value, $columns);
+        ksort($value);
+      }
+    };
+    array_walk($value1, $callback);
+    array_walk($value2, $callback);
+
+    return $value1 == $value2;
   }
 
 }

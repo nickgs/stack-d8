@@ -59,7 +59,7 @@ class SearchMultilingualEntityTest extends SearchTestBase {
     // definition. The parent class has already created the article and page
     // content types.
     $field_storage = FieldStorageConfig::loadByName('node', 'body');
-    $field_storage->translatable = TRUE;
+    $field_storage->setTranslatable(TRUE);
     $field_storage->save();
 
     // Create a few page nodes with multilingual body values.
@@ -264,11 +264,11 @@ class SearchMultilingualEntityTest extends SearchTestBase {
   /**
    * Verifies the indexing status counts.
    *
-   * @param $remaining
+   * @param int $remaining
    *   Count of remaining items to verify.
-   * @param $total
+   * @param int $total
    *   Count of total items to verify.
-   * @param $message
+   * @param string $message
    *   Message to use, something like "after updating the search index".
    */
   protected function assertIndexCounts($remaining, $total, $message) {

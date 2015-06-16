@@ -7,7 +7,6 @@
 
 namespace Drupal\Core\Database\Driver\mysql;
 
-use Drupal\Component\Utility\String;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Database\Query\Condition;
 use Drupal\Core\Database\SchemaObjectExistsException;
@@ -145,6 +144,10 @@ class Schema extends DatabaseSchema {
       if (!empty($spec['binary'])) {
         $sql .= ' BINARY';
       }
+      // Note we check for the "type" key here. "mysql_type" is VARCHAR:
+      if (isset($spec['type']) && $spec['type'] == 'varchar_ascii') {
+        $sql .= ' CHARACTER SET ascii COLLATE ascii_general_ci';
+      }
     }
     elseif (isset($spec['precision']) && isset($spec['scale'])) {
       $sql .= '(' . $spec['precision'] . ', ' . $spec['scale'] . ')';
@@ -219,6 +222,8 @@ class Schema extends DatabaseSchema {
     // database types back into schema types.
     // $map does not use drupal_static as its value never changes.
     static $map = array(
+      'varchar_ascii:normal' => 'VARCHAR',
+
       'varchar:normal'  => 'VARCHAR',
       'char:normal'     => 'CHAR',
 
@@ -306,21 +311,6 @@ class Schema extends DatabaseSchema {
 
     $this->connection->query('DROP TABLE {' . $table . '}');
     return TRUE;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function copyTable($source, $destination) {
-    if (!$this->tableExists($source)) {
-      throw new SchemaObjectDoesNotExistException(String::format("Cannot copy @source to @destination: table @source doesn't exist.", array('@source' => $source, '@destination' => $destination)));
-    }
-    if ($this->tableExists($destination)) {
-      throw new SchemaObjectExistsException(String::format("Cannot copy @source to @destination: table @destination already exists.", array('@source' => $source, '@destination' => $destination)));
-    }
-
-    $info = $this->getPrefixInfo($destination);
-    return $this->connection->query('CREATE TABLE `' . $info['table'] . '` LIKE {' . $source . '}');
   }
 
   public function addField($table, $field, $spec, $keys_new = array()) {

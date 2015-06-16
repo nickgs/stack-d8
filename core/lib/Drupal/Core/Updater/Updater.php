@@ -9,7 +9,7 @@ namespace Drupal\Core\Updater;
 
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\FileTransfer\FileTransferException;
-use Drupal\Core\FileTransfer\FileTransferInterface;
+use Drupal\Core\FileTransfer\FileTransfer;
 
 /**
  * Defines the base class for Updaters used in Drupal.
@@ -101,7 +101,7 @@ class Updater {
       return FALSE;
     }
     foreach ($info_files as $info_file) {
-      if (Unicode::substr($info_file->filename, 0, -5) == drupal_basename($directory)) {
+      if (Unicode::substr($info_file->filename, 0, -9) == drupal_basename($directory)) {
         // Info file Has the same name as the directory, return it.
         return $info_file->uri;
       }
@@ -109,6 +109,28 @@ class Updater {
     // Otherwise, return the first one.
     $info_file = array_shift($info_files);
     return $info_file->uri;
+  }
+
+  /**
+   * Get Extension information from directory.
+   *
+   * @param string $directory
+   *   Directory to search in.
+   *
+   * @return array
+   *   Extension info.
+   *
+   * @throws \Drupal\Core\Updater\UpdaterException
+   *   If the info parser does not provide any info.
+   */
+  protected static function getExtensionInfo($directory) {
+    $info_file = static::findInfoFile($directory);
+    $info = \Drupal::service('info_parser')->parse($info_file);
+    if (empty($info)) {
+      throw new UpdaterException(t('Unable to parse info file: %info_file.', ['%info_file' => $info_file]));
+    }
+
+    return $info;
   }
 
   /**
@@ -167,7 +189,7 @@ class Updater {
   /**
    * Updates a Drupal project and returns a list of next actions.
    *
-   * @param \Drupal\Core\FileTransfer\FileTransferInterface $filetransfer
+   * @param \Drupal\Core\FileTransfer\FileTransfer $filetransfer
    *   Object that is a child of FileTransfer. Used for moving files
    *   to the server.
    * @param array $overrides
@@ -226,7 +248,7 @@ class Updater {
   /**
    * Installs a Drupal project, returns a list of next actions.
    *
-   * @param \Drupal\Core\FileTransfer\FileTransferInterface $filetransfer
+   * @param \Drupal\Core\FileTransfer\FileTransfer $filetransfer
    *   Object that is a child of FileTransfer.
    * @param array $overrides
    *   An array of settings to override defaults; see self::getInstallArgs().
@@ -264,7 +286,7 @@ class Updater {
   /**
    * Makes sure the installation parent directory exists and is writable.
    *
-   * @param \Drupal\Core\FileTransfer\FileTransferInterface $filetransfer
+   * @param \Drupal\Core\FileTransfer\FileTransfer $filetransfer
    *   Object which is a child of FileTransfer.
    * @param string $directory
    *   The installation directory to prepare.
@@ -309,7 +331,7 @@ class Updater {
   /**
    * Ensures that a given directory is world readable.
    *
-   * @param \Drupal\Core\FileTransfer\FileTransferInterface $filetransfer
+   * @param \Drupal\Core\FileTransfer\FileTransfer $filetransfer
    *   Object which is a child of FileTransfer.
    * @param string $path
    *   The file path to make world readable.
@@ -327,16 +349,16 @@ class Updater {
   /**
    * Performs a backup.
    *
-   * @param \Drupal\Core\FileTransfer\FileTransferInterface $filetransfer
+   * @param \Drupal\Core\FileTransfer\FileTransfer $filetransfer
    *   Object which is a child of FileTransfer.
    * @param string $from
    *   The file path to copy from.
    * @param string $to
    *   The file path to copy to.
    *
-   * @todo Not implemented.
+   * @todo Not implemented: https://www.drupal.org/node/2474355
    */
-  public function makeBackup(FileTransferInterface $filetransfer, $from, $to) {
+  public function makeBackup(FileTransfer $filetransfer, $from, $to) {
   }
 
   /**

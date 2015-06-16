@@ -10,6 +10,7 @@ namespace Drupal\config_translation\Form;
 use Drupal\config_translation\ConfigMapperManagerInterface;
 use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\TypedData\TypedDataInterface;
+use Drupal\Core\TypedData\TraversableTypedDataInterface;
 use Drupal\Core\Form\BaseFormIdInterface;
 use Drupal\Core\Form\FormBase;
 use Drupal\Core\Form\FormStateInterface;
@@ -143,7 +144,7 @@ abstract class ConfigTranslationFormBase extends FormBase implements BaseFormIdI
 
     $this->mapper = $mapper;
     $this->language = $language;
-    $this->sourceLanguage = $this->mapper->getLanguageWithFallback();
+    $this->sourceLanguage = $this->languageManager->getLanguage($this->mapper->getLangcode());
 
     // Get base language configuration to display in the form before setting the
     // language to use for the form. This avoids repetitively settings and

@@ -8,10 +8,14 @@
 namespace Drupal\field\Tests\EntityReference;
 
 use Drupal\Core\Cache\Cache;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\entity_reference\Tests\EntityReferenceTestTrait;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\filter\Entity\FilterFormat;
 use Drupal\system\Tests\Entity\EntityUnitTestBase;
+use Drupal\user\Entity\Role;
+use Drupal\user\RoleInterface;
 
 /**
  * Tests the formatters functionality.
@@ -19,6 +23,8 @@ use Drupal\system\Tests\Entity\EntityUnitTestBase;
  * @group entity_reference
  */
 class EntityReferenceFormatterTest extends EntityUnitTestBase {
+
+  use EntityReferenceTestTrait;
 
   /**
    * The entity type used in this test.
@@ -66,11 +72,17 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
   protected function setUp() {
     parent::setUp();
 
+    // Grant the 'view test entity' permission.
+    $this->installConfig(array('user'));
+    Role::load(RoleInterface::ANONYMOUS_ID)
+      ->grantPermission('view test entity')
+      ->save();
+
     // The label formatter rendering generates links, so build the router.
     $this->installSchema('system', 'router');
     $this->container->get('router.builder')->rebuild();
 
-    entity_reference_create_field($this->entityType, $this->bundle, $this->fieldName, 'Field test', $this->entityType, 'default', array(), FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
+    $this->createEntityReferenceField($this->entityType, $this->bundle, $this->fieldName, 'Field test', $this->entityType, 'default', array(), FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED);
 
     // Set up a field, so that the entity that'll be referenced bubbles up a
     // cache tag when rendering it entirely.
@@ -115,9 +127,14 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
   }
 
   /**
-   * Assert unaccessible items don't change the data of the fields.
+   * Assert inaccessible items don't change the data of the fields.
    */
   public function testAccess() {
+    // Revoke the 'view test entity' permission for this test.
+    Role::load(RoleInterface::ANONYMOUS_ID)
+      ->revokePermission('view test entity')
+      ->save();
+
     $field_name = $this->fieldName;
 
     $referencing_entity = entity_create($this->entityType, array('name' => $this->randomMachineName()));
@@ -172,7 +189,7 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
       </div>
 </div>
 ';
-    $expected_rendered_body_field_1 = '<div class="clearfix field field-entity-test--body field-name-body field-type-text field-label-above">
+    $expected_rendered_body_field_1 = '<div class="field field-entity-test--body field-name-body field-type-text field-label-above">
       <div class="field-label">Body</div>
     <div class="field-items">
           <div class="field-item"><p>Hello, world!</p></div>
@@ -202,26 +219,40 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
     // The 'link' settings is TRUE by default.
     $build = $this->buildRenderArray([$this->referencedEntity, $this->unsavedReferencedEntity], $formatter);
 
+    $expected_field_cacheability = [
+      'contexts' => [],
+      'tags' => [],
+      'max-age' => Cache::PERMANENT,
+    ];
+    $this->assertEqual($build['#cache'], $expected_field_cacheability, 'The field render array contains the entity access cacheability metadata');
     $expected_item_1 = array(
       '#type' => 'link',
       '#title' => $this->referencedEntity->label(),
       '#url' => $this->referencedEntity->urlInfo(),
       '#options' => $this->referencedEntity->urlInfo()->getOptions(),
       '#cache' => array(
+        'contexts' => [
+          'user.permissions',
+        ],
         'tags' => $this->referencedEntity->getCacheTags(),
       ),
     );
     $this->assertEqual(drupal_render($build[0]), drupal_render($expected_item_1), sprintf('The markup returned by the %s formatter is correct for an item with a saved entity.', $formatter));
+    $this->assertEqual(CacheableMetadata::createFromRenderArray($build[0]), CacheableMetadata::createFromRenderArray($expected_item_1));
 
     // The second referenced entity is "autocreated", therefore not saved and
     // lacking any URL info.
     $expected_item_2 = array(
       '#markup' => $this->unsavedReferencedEntity->label(),
       '#cache' => array(
+        'contexts' => [
+          'user.permissions',
+        ],
         'tags' => $this->unsavedReferencedEntity->getCacheTags(),
+        'max-age' => Cache::PERMANENT,
       ),
     );
-    $this->assertEqual($build[1], $expected_item_2, sprintf('The markup returned by the %s formatter is correct for an item with a unsaved entity.', $formatter));
+    $this->assertEqual($build[1], $expected_item_2, sprintf('The render array returned by the %s formatter is correct for an item with a unsaved entity.', $formatter));
 
     // Test with the 'link' setting set to FALSE.
     $build = $this->buildRenderArray([$this->referencedEntity, $this->unsavedReferencedEntity], $formatter, array('link' => FALSE));
@@ -232,7 +263,7 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
     // \Drupal\Core\Entity\EntityInterface::urlInfo() will throw an exception
     // and the label formatter will output only the label instead of a link.
     $field_storage_config = FieldStorageConfig::loadByName($this->entityType, $this->fieldName);
-    $field_storage_config->settings['target_type'] = 'entity_test_label';
+    $field_storage_config->setSetting('target_type', 'entity_test_label');
     $field_storage_config->save();
 
     $referenced_entity_with_no_link_template = entity_create('entity_test_label', array(
@@ -263,15 +294,14 @@ class EntityReferenceFormatterTest extends EntityUnitTestBase {
     // Create the entity that will have the entity reference field.
     $referencing_entity = entity_create($this->entityType, array('name' => $this->randomMachineName()));
 
-    $delta = 0;
-    foreach ($referenced_entities as $referenced_entity) {
-      $referencing_entity->{$this->fieldName}[$delta]->entity = $referenced_entity;
-      $referencing_entity->{$this->fieldName}[$delta++]->access = TRUE;
-    }
-
-    // Build the renderable array for the entity reference field.
     $items = $referencing_entity->get($this->fieldName);
 
+    // Assign the referenced entities.
+    foreach ($referenced_entities as $referenced_entity) {
+      $items[] = ['entity' => $referenced_entity];
+    }
+
+    // Build the renderable array for the field.
     return $items->view(array('type' => $formatter, 'settings' => $formatter_options));
   }
 

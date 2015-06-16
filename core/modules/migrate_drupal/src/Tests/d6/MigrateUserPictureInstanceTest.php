@@ -9,21 +9,21 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\field\Entity\FieldConfig;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * User picture field instance migration.
  *
  * @group migrate_drupal
  */
-class MigrateUserPictureInstanceTest extends MigrateDrupalTestBase {
+class MigrateUserPictureInstanceTest extends MigrateDrupal6TestBase {
 
   /**
    * Modules to enable.
    *
    * @var array
    */
-  static $modules = array('image');
+  static $modules = array('image', 'file');
 
   /**
    * {@inheritdoc}
@@ -55,12 +55,12 @@ class MigrateUserPictureInstanceTest extends MigrateDrupalTestBase {
   public function testUserPictureFieldInstance() {
     $field = FieldConfig::load('user.user.user_picture');
     $settings = $field->getSettings();
-    $this->assertEqual($settings['file_extensions'], 'png gif jpg jpeg');
-    $this->assertEqual($settings['file_directory'], 'pictures');
-    $this->assertEqual($settings['max_filesize'], '30KB');
-    $this->assertEqual($settings['max_resolution'], '85x85');
+    $this->assertIdentical('png gif jpg jpeg', $settings['file_extensions']);
+    $this->assertIdentical('pictures', $settings['file_directory']);
+    $this->assertIdentical('30KB', $settings['max_filesize']);
+    $this->assertIdentical('85x85', $settings['max_resolution']);
 
-    $this->assertEqual(array('user', 'user', 'user_picture'), entity_load('migration', 'd6_user_picture_field_instance')->getIdMap()->lookupDestinationID(array('')));
+    $this->assertIdentical(array('user', 'user', 'user_picture'), entity_load('migration', 'd6_user_picture_field_instance')->getIdMap()->lookupDestinationID(array('')));
   }
 
 }

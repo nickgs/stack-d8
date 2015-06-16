@@ -8,6 +8,7 @@
 namespace Drupal\block_content\Entity;
 
 use Drupal\Core\Entity\ContentEntityBase;
+use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
@@ -18,14 +19,15 @@ use Drupal\block_content\BlockContentInterface;
  *
  * @ContentEntityType(
  *   id = "block_content",
- *   label = @Translation("Custom Block"),
- *   bundle_label = @Translation("Custom Block type"),
+ *   label = @Translation("Custom block"),
+ *   bundle_label = @Translation("Custom block type"),
  *   handlers = {
  *     "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
  *     "storage_schema" = "Drupal\block_content\BlockContentStorageSchema",
  *     "access" = "Drupal\block_content\BlockContentAccessControlHandler",
  *     "list_builder" = "Drupal\block_content\BlockContentListBuilder",
  *     "view_builder" = "Drupal\block_content\BlockContentViewBuilder",
+ *     "views_data" = "Drupal\block_content\BlockContentViewsData",
  *     "form" = {
  *       "add" = "Drupal\block_content\BlockContentForm",
  *       "edit" = "Drupal\block_content\BlockContentForm",
@@ -64,6 +66,8 @@ use Drupal\block_content\BlockContentInterface;
  * See https://www.drupal.org/node/2284917#comment-9132521 for more information.
  */
 class BlockContent extends ContentEntityBase implements BlockContentInterface {
+
+  use EntityChangedTrait;
 
   /**
    * The theme the block is being created in.
@@ -166,6 +170,7 @@ class BlockContent extends ContentEntityBase implements BlockContentInterface {
     $fields['langcode'] = BaseFieldDefinition::create('language')
       ->setLabel(t('Language'))
       ->setDescription(t('The custom block language code.'))
+      ->setTranslatable(TRUE)
       ->setRevisionable(TRUE)
       ->setDisplayOptions('view', array(
         'type' => 'hidden',
@@ -200,6 +205,7 @@ class BlockContent extends ContentEntityBase implements BlockContentInterface {
     $fields['changed'] = BaseFieldDefinition::create('changed')
       ->setLabel(t('Changed'))
       ->setDescription(t('The time that the custom block was last edited.'))
+      ->setTranslatable(TRUE)
       ->setRevisionable(TRUE);
 
     return $fields;

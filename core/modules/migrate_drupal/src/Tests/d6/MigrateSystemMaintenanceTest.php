@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateMessage;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade maintenance variables to system.*.yml.
  *
  * @group migrate_drupal
  */
-class MigrateSystemMaintenanceTest extends MigrateDrupalTestBase {
+class MigrateSystemMaintenanceTest extends MigrateDrupal6TestBase {
 
   /**
    * {@inheritdoc}
@@ -37,7 +37,7 @@ class MigrateSystemMaintenanceTest extends MigrateDrupalTestBase {
    */
   public function testSystemMaintenance() {
     $config = $this->config('system.maintenance');
-    $this->assertIdentical($config->get('message'), 'Drupal is currently under maintenance. We should be back shortly. Thank you for your patience.');
+    $this->assertIdentical('Drupal is currently under maintenance. We should be back shortly. Thank you for your patience.', $config->get('message'));
   }
 
 }

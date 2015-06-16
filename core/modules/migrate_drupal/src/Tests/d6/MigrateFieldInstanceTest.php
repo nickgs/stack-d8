@@ -9,7 +9,7 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\field\Entity\FieldConfig;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 use Drupal\link\LinkItemInterface;
 
 /**
@@ -17,7 +17,7 @@ use Drupal\link\LinkItemInterface;
  *
  * @group migrate_drupal
  */
-class MigrateFieldInstanceTest extends MigrateDrupalTestBase {
+class MigrateFieldInstanceTest extends MigrateDrupal6TestBase {
 
   /**
    * Modules to enable.
@@ -32,6 +32,7 @@ class MigrateFieldInstanceTest extends MigrateDrupalTestBase {
     'datetime',
     'node',
     'field',
+    'text',
   );
 
   /**
@@ -89,42 +90,42 @@ class MigrateFieldInstanceTest extends MigrateDrupalTestBase {
     $entity = entity_create('node', array('type' => 'story'));
     // Test a text field.
     $field = FieldConfig::load('node.story.field_test');
-    $this->assertEqual($field->label(), 'Text Field');
+    $this->assertIdentical('Text Field', $field->label());
     $expected = array('max_length' => 255);
-    $this->assertEqual($field->getSettings(), $expected);
-    $this->assertEqual('text for default value', $entity->field_test->value);
+    $this->assertIdentical($expected, $field->getSettings());
+    $this->assertIdentical('text for default value', $entity->field_test->value);
 
     // Test a number field.
     $field = FieldConfig::load('node.story.field_test_two');
-    $this->assertEqual($field->label(), 'Integer Field');
+    $this->assertIdentical('Integer Field', $field->label());
     $expected = array(
-      'min' => '10',
-      'max' => '100',
+      'min' => 10,
+      'max' => 100,
       'prefix' => 'pref',
       'suffix' => 'suf',
-      'unsigned' => '',
+      'unsigned' => FALSE,
       'size' => 'normal',
     );
-    $this->assertEqual($field->getSettings(), $expected);
+    $this->assertIdentical($expected, $field->getSettings());
 
     $field = FieldConfig::load('node.story.field_test_four');
-    $this->assertEqual($field->label(), 'Float Field');
+    $this->assertIdentical('Float Field', $field->label());
     $expected = array(
-      'min' => 100,
-      'max' => 200,
+      'min' => 100.0,
+      'max' => 200.0,
       'prefix' => 'id-',
       'suffix' => '',
     );
-    $this->assertEqual($field->getSettings(), $expected);
+    $this->assertIdentical($expected, $field->getSettings());
 
     // Test email field.
     $field = FieldConfig::load('node.story.field_test_email');
-    $this->assertEqual($field->label(), 'Email Field');
-    $this->assertEqual('benjy@example.com', $entity->field_test_email->value);
+    $this->assertIdentical('Email Field', $field->label());
+    $this->assertIdentical('benjy@example.com', $entity->field_test_email->value);
 
     // Test a filefield.
     $field = FieldConfig::load('node.story.field_test_filefield');
-    $this->assertEqual($field->label(), 'File Field');
+    $this->assertIdentical('File Field', $field->label());
     $expected = array(
       'file_extensions' => 'txt pdf doc',
       'file_directory' => 'images',
@@ -134,21 +135,26 @@ class MigrateFieldInstanceTest extends MigrateDrupalTestBase {
       'display_field' => FALSE,
       'display_default' => FALSE,
       'uri_scheme' => 'public',
-      'handler' => 'default',
+      // This value should be 'default:file' but the test does not migrate field
+      // storages so we end up with the default value for this setting.
+      'handler' => 'default:node',
+      'handler_settings' => array(),
       'target_bundle' => NULL,
     );
+    $field_settings = $field->getSettings();
+    ksort($expected);
+    ksort($field_settings);
     // This is the only way to compare arrays.
-    $this->assertFalse(array_diff_assoc($field->getSettings(), $expected));
-    $this->assertFalse(array_diff_assoc($expected, $field->getSettings()));
+    $this->assertIdentical($expected, $field_settings);
 
     // Test a link field.
     $field = FieldConfig::load('node.story.field_test_link');
-    $this->assertEqual($field->label(), 'Link Field');
+    $this->assertIdentical('Link Field', $field->label());
     $expected = array('title' => 2, 'link_type' => LinkItemInterface::LINK_GENERIC);
-    $this->assertEqual($field->getSettings(), $expected);
-    $this->assertEqual('default link title', $entity->field_test_link->title, 'Field field_test_link default title is correct.');
-    $this->assertEqual('http://drupal.org', $entity->field_test_link->url, 'Field field_test_link default title is correct.');
-    $this->assertIdentical($entity->field_test_link->options['attributes'], []);
+    $this->assertIdentical($expected, $field->getSettings());
+    $this->assertIdentical('default link title', $entity->field_test_link->title, 'Field field_test_link default title is correct.');
+    $this->assertIdentical('https://www.drupal.org', $entity->field_test_link->url, 'Field field_test_link default title is correct.');
+    $this->assertIdentical([], $entity->field_test_link->options['attributes']);
   }
 
   /**

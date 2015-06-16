@@ -1,8 +1,14 @@
-/* --------------- Search Results ---------------- */
+/**
+ * @file
+ * Visual styles for Bartik's search results.
+ */
 
 ol.search-results {
-  padding-left: 0;
+  padding-left: 0; /* LTR */
   list-style-position: inside;
+}
+[dir="rtl"] ol.search-results {
+  padding-right: 0;
 }
 .search-results li {
   border-bottom: 1px solid #d3d7d9;
@@ -14,6 +20,12 @@ ol.search-results {
   padding-bottom: 0;
   margin-bottom: 1em;
 }
-.search-results .search-snippet-info {
-  padding-left: 0;
+.search-result__title {
+  font-weight: bold;
+}
+.search-result__snippet-info {
+  padding-left: 0; /* LTR */
+}
+[dir="rtl"] .search-result__snippet-info {
+  padding-right: 0;
 }

@@ -35,6 +35,27 @@ namespace Drupal\Core\Entity;
 interface EntityDefinitionUpdateManagerInterface {
 
   /**
+   * Indicates that a definition has just been created.
+   *
+   * @var int
+   */
+  const DEFINITION_CREATED = 1;
+
+  /**
+   * Indicates that a definition has changes.
+   *
+   * @var int
+   */
+  const DEFINITION_UPDATED = 2;
+
+  /**
+   * Indicates that a definition has just been deleted.
+   *
+   * @var int
+   */
+  const DEFINITION_DELETED = 3;
+
+  /**
    * Checks if there are any definition updates that need to be applied.
    *
    * @return bool
@@ -43,7 +64,7 @@ interface EntityDefinitionUpdateManagerInterface {
   public function needsUpdates();
 
   /**
-   * Returns a human readable summary of the detected changes.
+   * Gets a human readable summary of the detected changes.
    *
    * @return array
    *   An associative array keyed by entity type id. Each entry is an array of

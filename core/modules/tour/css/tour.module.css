@@ -16,7 +16,7 @@
   color: #fff;
   font-weight: bold;
 }
-.toolbar .tour-toolbar-tab button.active {
+.toolbar .tour-toolbar-tab button.is-active {
   background-image: -webkit-linear-gradient(rgba(255, 255, 255, 0.25) 20%, transparent 200%);
   background-image: linear-gradient(rgba(255, 255, 255, 0.25) 20%, transparent 200%);
 }
@@ -24,7 +24,7 @@
   outline: thin dotted;
 }
 
-/* @todo Remove once http://drupal.org/node/1916690 is resolved. */
+/* @todo Remove once https://www.drupal.org/node/1916690 is resolved. */
 .toolbar .tour-toolbar-tab.toolbar-tab.hidden {
   display: none;
 }
@@ -41,7 +41,7 @@
   left: 0;
 }
 
-/* @todo Remove once http://drupal.org/node/1916690 is resolved. */
+/* @todo Remove once https://www.drupal.org/node/1916690 is resolved. */
 .toolbar .tour-toolbar-tab.toolbar-tab.hidden {
   display: none;
 }

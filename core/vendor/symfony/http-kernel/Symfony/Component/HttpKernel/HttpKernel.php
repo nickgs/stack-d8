@@ -40,7 +40,7 @@ class HttpKernel implements HttpKernelInterface, TerminableInterface
     protected $requestStack;
 
     /**
-     * Constructor
+     * Constructor.
      *
      * @param EventDispatcherInterface    $dispatcher   An EventDispatcherInterface instance
      * @param ControllerResolverInterface $resolver     A ControllerResolverInterface instance
@@ -267,7 +267,7 @@ class HttpKernel implements HttpKernelInterface, TerminableInterface
                 $a[] = sprintf('%s => %s', $k, $this->varToString($v));
             }
 
-            return sprintf("Array(%s)", implode(', ', $a));
+            return sprintf('Array(%s)', implode(', ', $a));
         }
 
         if (is_resource($var)) {

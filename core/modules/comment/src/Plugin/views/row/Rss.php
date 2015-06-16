@@ -18,7 +18,7 @@ use Drupal\views\Plugin\views\row\RssPluginBase;
  *   help = @Translation("Display the comment as RSS."),
  *   theme = "views_view_row_rss",
  *   register_theme = FALSE,
- *   base = {"comment"},
+ *   base = {"comment_field_data"},
  *   display_types = {"feed"}
  * )
  */
@@ -27,12 +27,17 @@ class Rss extends RssPluginBase {
   /**
    * {@inheritdoc}
    */
-  protected $base_table = 'comment';
+  protected $base_table = 'comment_field_data';
 
   /**
    * {@inheritdoc}
    */
   protected $base_field = 'cid';
+
+  /**
+   * @var \Drupal\comment\CommentInterface[]
+   */
+  protected $comments;
 
   /**
    * {@inheritdoc}
@@ -46,11 +51,7 @@ class Rss extends RssPluginBase {
       $cids[] = $row->cid;
     }
 
-    $this->comments = entity_load_multiple('comment', $cids);
-    foreach ($this->comments as $comment) {
-      $comment->depth = count(explode('.', $comment->getThread())) - 1;
-    }
-
+    $this->comments = $this->entityManager->getStorage('comment')->loadMultiple($cids);
   }
 
   /**

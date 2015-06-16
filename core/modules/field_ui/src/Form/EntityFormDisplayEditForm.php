@@ -11,6 +11,7 @@ use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\PluginSettingsInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Url;
+use Drupal\field_ui\FieldUI;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -67,7 +68,7 @@ class EntityFormDisplayEditForm extends EntityDisplayFormBase {
     if ($configuration && $configuration['type'] != 'hidden') {
       $plugin = $this->pluginManager->getInstance(array(
         'field_definition' => $field_definition,
-        'form_mode' => $this->entity->mode,
+        'form_mode' => $this->entity->getMode(),
         'configuration' => $configuration
       ));
     }
@@ -86,7 +87,7 @@ class EntityFormDisplayEditForm extends EntityDisplayFormBase {
    * {@inheritdoc}
    */
   protected function getDisplayModes() {
-    return $this->entityManager->getFormModes($this->entity->targetEntityType);
+    return $this->entityManager->getFormModes($this->entity->getTargetEntityTypeId());
   }
 
   /**
@@ -105,12 +106,10 @@ class EntityFormDisplayEditForm extends EntityDisplayFormBase {
    * {@inheritdoc}
    */
   protected function getOverviewUrl($mode) {
-    $entity_type = $this->entityManager->getDefinition($this->entity->targetEntityType);
-    $field_entity_type = $entity_type->getBundleEntityType() != 'bundle'?  $entity_type->getBundleEntityType() : $entity_type->id();
-    return Url::fromRoute('entity.entity_form_display.' . $field_entity_type . '.form_mode', [
-      $this->bundleEntityTypeId => $this->entity->bundle,
+    $entity_type = $this->entityManager->getDefinition($this->entity->getTargetEntityTypeId());
+    return Url::fromRoute('entity.entity_form_display.' . $this->entity->getTargetEntityTypeId() . '.form_mode', [
       'form_mode_name' => $mode,
-    ]);
+    ] + FieldUI::getRouteBundleParameter($entity_type, $this->entity->getTargetBundle()));
   }
 
   /**
@@ -124,7 +123,7 @@ class EntityFormDisplayEditForm extends EntityDisplayFormBase {
       $settings_form[$module] = $this->moduleHandler->invoke($module, 'field_widget_third_party_settings_form', array(
         $plugin,
         $field_definition,
-        $this->entity->mode,
+        $this->entity->getMode(),
         $form,
         $form_state,
       ));
@@ -139,7 +138,7 @@ class EntityFormDisplayEditForm extends EntityDisplayFormBase {
     $context = array(
       'widget' => $plugin,
       'field_definition' => $field_definition,
-      'form_mode' => $this->entity->mode,
+      'form_mode' => $this->entity->getMode(),
     );
     $this->moduleHandler->alter('field_widget_settings_summary', $summary, $context);
   }

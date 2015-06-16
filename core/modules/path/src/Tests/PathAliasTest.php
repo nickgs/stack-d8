@@ -124,7 +124,7 @@ class PathAliasTest extends PathTestBase {
     $edit['source'] = 'node/' . $node1->id();
     $alias = $this->randomMachineName(128);
     $edit['alias'] = $alias;
-    // The alias is shortened to 50 characters counting the elipsis.
+    // The alias is shortened to 50 characters counting the ellipsis.
     $truncated_alias = substr($alias, 0, 47);
     $this->drupalPostForm('admin/config/search/path/add', $edit, t('Save'));
     $this->assertNoText($alias, 'The untruncated alias was not found.');
@@ -269,7 +269,7 @@ class PathAliasTest extends PathTestBase {
   /**
    * Returns the path ID.
    *
-   * @param $alias
+   * @param string $alias
    *   A string containing an aliased path.
    *
    * @return int

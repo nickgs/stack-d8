@@ -19,7 +19,7 @@ use Drupal\views\Plugin\views\wizard\WizardPluginBase;
  *
  * @ViewsWizard(
  *   id = "comment",
- *   base_table = "comment",
+ *   base_table = "comment_field_data",
  *   title = @Translation("Comments")
  * )
  */
@@ -71,6 +71,7 @@ class Comment extends WizardPluginBase {
 
     // Add permission-based access control.
     $display_options['access']['type'] = 'perm';
+    $display_options['access']['options']['perm'] = 'access comments';
 
     // Add a relationship to nodes.
     $display_options['relationships']['node']['id'] = 'node';
@@ -100,8 +101,9 @@ class Comment extends WizardPluginBase {
     $display_options['fields']['subject']['alter']['html'] = 0;
     $display_options['fields']['subject']['hide_empty'] = 0;
     $display_options['fields']['subject']['empty_zero'] = 0;
-    $display_options['fields']['subject']['link_to_comment'] = 1;
-    $display_options['fields']['subject']['plugin_id'] = 'comment';
+    $display_options['fields']['subject']['plugin_id'] = 'field';
+    $display_options['fields']['subject']['type'] = 'string';
+    $display_options['fields']['subject']['settings'] = ['link_to_entity' => TRUE];
 
     return $display_options;
   }

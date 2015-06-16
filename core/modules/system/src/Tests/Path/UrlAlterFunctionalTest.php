@@ -7,6 +7,7 @@
 
 namespace Drupal\system\Tests\Path;
 
+use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -78,17 +79,16 @@ class UrlAlterFunctionalTest extends WebTestBase {
    * Assert that an outbound path is altered to an expected value.
    *
    * @param $original
-   *   A string with the original path that is run through _url().
+   *   A string with the original path that is run through generateFrommPath().
    * @param $final
-   *   A string with the expected result after _url().
+   *   A string with the expected result after generateFrommPath().
    * @return
    *   TRUE if $original was correctly altered to $final, FALSE otherwise.
    */
   protected function assertUrlOutboundAlter($original, $final) {
     // Test outbound altering.
     $result = $this->container->get('url_generator')->generateFromPath($original);
-    $base_path = base_path() . $GLOBALS['script_path'];
-    $result = substr($result, strlen($base_path));
+    $final = Url::fromUri('internal:/' . $final)->toString();
     $this->assertIdentical($result, $final, format_string('Altered outbound URL %original, expected %final, and got %result.', array('%original' => $original, '%final' => $final, '%result' => $result)));
   }
 
@@ -98,7 +98,7 @@ class UrlAlterFunctionalTest extends WebTestBase {
    * @param $original
    *   The original path before it has been altered by inbound URL processing.
    * @param $final
-   *   A string with the expected result after _url().
+   *   A string with the expected result.
    * @return
    *   TRUE if $original was correctly altered to $final, FALSE otherwise.
    */

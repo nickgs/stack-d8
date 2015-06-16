@@ -9,20 +9,22 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\Core\Database\Database;
 use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Users contact settings migration.
  *
  * @group migrate_drupal
  */
-class MigrateUserContactSettingsTest extends MigrateDrupalTestBase {
+class MigrateUserContactSettingsTest extends MigrateDrupal6TestBase {
 
   /**
    * {@inheritdoc}
    */
   protected function setUp() {
     parent::setUp();
+
+    $this->installSchema('user', array('users_data'));
 
     $dumps = array(
       $this->getDumpDirectory() . '/Users.php',
@@ -56,15 +58,15 @@ class MigrateUserContactSettingsTest extends MigrateDrupalTestBase {
     $module = $key = 'contact';
     $uid = 2;
     $setting = $user_data->get($module, $uid, $key);
-    $this->assertIdentical($setting, '1');
+    $this->assertIdentical('1', $setting);
 
     $uid = 8;
     $setting = $user_data->get($module, $uid, $key);
-    $this->assertIdentical($setting, '0');
+    $this->assertIdentical('0', $setting);
 
     $uid = 15;
     $setting = $user_data->get($module, $uid, $key);
-    $this->assertIdentical($setting, NULL);
+    $this->assertIdentical(NULL, $setting);
   }
 
 }

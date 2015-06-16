@@ -176,9 +176,10 @@ function views_views_data() {
 
   $entity_manager = \Drupal::entityManager();
   if ($entity_manager->hasDefinition('field_storage_config')) {
+    /** @var \Drupal\field\FieldStorageConfigInterface $field_storage */
     foreach ($entity_manager->getStorage('field_storage_config')->loadMultiple() as $field_storage) {
       if (_views_field_get_entity_type_storage($field_storage)) {
-        $result = (array) $module_handler->invoke($field_storage->module, 'field_views_data', array($field_storage));
+        $result = (array) $module_handler->invoke($field_storage->getTypeProvider(), 'field_views_data', array($field_storage));
         if (empty($result)) {
           $result = views_field_default_views_data($field_storage);
         }
@@ -207,9 +208,10 @@ function views_views_data_alter(&$data) {
   if (!$entity_manager->hasDefinition('field_storage_config')) {
     return;
   }
+  /** @var \Drupal\field\FieldStorageConfigInterface $field_storage */
   foreach ($entity_manager->getStorage('field_storage_config')->loadMultiple() as $field_storage) {
     if (_views_field_get_entity_type_storage($field_storage)) {
-      $function = $field_storage->module . '_field_views_data_views_data_alter';
+      $function = $field_storage->getTypeProvider() . '_field_views_data_views_data_alter';
       if (function_exists($function)) {
         $function($data, $field_storage);
       }
@@ -321,7 +323,7 @@ function views_field_default_views_data(FieldStorageConfigInterface $field_stora
 
   // Description of the field tables.
   // @todo Generalize this code to make it work with any table layout. See
-  //   https://drupal.org/node/2079019.
+  //   https://www.drupal.org/node/2079019.
   $table_mapping = $storage->getTableMapping();
   $field_tables = array(
     EntityStorageInterface::FIELD_LOAD_CURRENT => array(
@@ -340,8 +342,7 @@ function views_field_default_views_data(FieldStorageConfigInterface $field_stora
   $table_alias = $field_tables[EntityStorageInterface::FIELD_LOAD_CURRENT]['alias'];
   if ($data_table) {
     // Tell Views how to join to the base table, via the data table.
-    $data[$table_alias]['table']['join'][$base_table] = array(
-      'left_table' => $data_table,
+    $data[$table_alias]['table']['join'][$data_table] = array(
       'left_field' => $entity_type->getKey('id'),
       'field' => 'entity_id',
       'extra' => array(
@@ -365,8 +366,7 @@ function views_field_default_views_data(FieldStorageConfigInterface $field_stora
     $table_alias = $field_tables[EntityStorageInterface::FIELD_LOAD_REVISION]['alias'];
     if ($entity_revision_data_table) {
       // Tell Views how to join to the revision table, via the data table.
-      $data[$table_alias]['table']['join'][$entity_revision_table] = array(
-        'left_table' => $entity_revision_data_table,
+      $data[$table_alias]['table']['join'][$entity_revision_data_table] = array(
         'left_field' => $entity_type->getKey('revision'),
         'field' => 'revision_id',
         'extra' => array(
@@ -462,7 +462,6 @@ function views_field_default_views_data(FieldStorageConfigInterface $field_stora
       // Provide a real field for group by.
       'real field' => $field_alias . '_' . $real_field,
       'additional fields' => $add_fields,
-      'entity_tables' => $entity_tables,
       // Default the element type to div, let the UI change it if necessary.
       'element type' => 'div',
       'is revision' => $type == EntityStorageInterface::FIELD_LOAD_REVISION,

@@ -17,7 +17,7 @@ class ThemeAdminForm extends ConfigFormBase {
   /**
    * {@inheritdoc}
    */
-  public function getFormID() {
+  public function getFormId() {
     return 'system_themes_admin_form';
   }
 
@@ -49,6 +49,7 @@ class ThemeAdminForm extends ConfigFormBase {
     $form['admin_theme']['actions']['submit'] = array(
       '#type' => 'submit',
       '#value' => $this->t('Save configuration'),
+      '#button_type' => 'primary',
     );
     return $form;
   }

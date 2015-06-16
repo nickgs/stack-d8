@@ -33,6 +33,7 @@ use Drupal\user\UserInterface;
  *   },
  *   base_table = "entity_test",
  *   persistent_cache = FALSE,
+ *   list_cache_contexts = { "entity_test_view_grants" },
  *   entity_keys = {
  *     "id" = "id",
  *     "uuid" = "uuid",
@@ -77,7 +78,8 @@ class EntityTest extends ContentEntityBase implements EntityOwnerInterface {
 
     $fields['langcode'] = BaseFieldDefinition::create('language')
       ->setLabel(t('Language code'))
-      ->setDescription(t('The language code of the test entity.'));
+      ->setDescription(t('The language code of the test entity.'))
+      ->setTranslatable(TRUE);
 
     $fields['name'] = BaseFieldDefinition::create('string')
       ->setLabel(t('Name'))
@@ -100,6 +102,11 @@ class EntityTest extends ContentEntityBase implements EntityOwnerInterface {
       ->setDescription(t('The bundle of the test entity.'))
       ->setRequired(TRUE);
 
+    $fields['created'] = BaseFieldDefinition::create('created')
+      ->setLabel(t('Authored on'))
+      ->setDescription(t('Time the entity was created'))
+      ->setTranslatable(TRUE);
+
     $fields['user_id'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel(t('User ID'))
       ->setDescription(t('The ID of the associated user.'))
@@ -115,7 +122,6 @@ class EntityTest extends ContentEntityBase implements EntityOwnerInterface {
         'settings' => array(
           'match_operator' => 'CONTAINS',
           'size' => '60',
-          'autocomplete_type' => 'tags',
           'placeholder' => '',
         ),
       ));

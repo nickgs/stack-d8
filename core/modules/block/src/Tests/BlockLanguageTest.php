@@ -11,7 +11,7 @@ use Drupal\simpletest\WebTestBase;
 use Drupal\block\Entity\Block;
 
 /**
- * Tests if a block can be configure to be only visibile on a particular
+ * Tests if a block can be configured to be only visible on a particular
  * language.
  *
  * @group block
@@ -34,7 +34,7 @@ class BlockLanguageTest extends WebTestBase {
     parent::setUp();
 
     // Create a new user, allow him to manage the blocks and the languages.
-    $this->adminUser = $this->drupalCreateUser(array('administer blocks', 'administer languages', 'administer site configuration'));
+    $this->adminUser = $this->drupalCreateUser(array('administer blocks', 'administer languages'));
     $this->drupalLogin($this->adminUser);
 
     // Add predefined language.
@@ -68,7 +68,7 @@ class BlockLanguageTest extends WebTestBase {
     $edit = array(
       'site_default_language' => 'fr',
     );
-    $this->drupalPostForm('admin/config/regional/settings', $edit, t('Save configuration'));
+    $this->drupalPostForm('admin/config/regional/language', $edit, t('Save configuration'));
 
     // Check that a page has a block.
     $this->drupalGet('en');
@@ -119,11 +119,16 @@ class BlockLanguageTest extends WebTestBase {
    * Tests block language visibility with different language types.
    */
   public function testMultipleLanguageTypes() {
-    // Customize content language settings from their defaults.
+    // Customize content language detection to be different from interface
+    // language detection.
     $edit = [
-      'language_content[configurable]' => TRUE,
+      // Interface language detection: only using session.
       'language_interface[enabled][language-url]' => FALSE,
       'language_interface[enabled][language-session]' => TRUE,
+      // Content language detection: only using URL.
+      'language_content[configurable]' => TRUE,
+      'language_content[enabled][language-url]' => TRUE,
+      'language_content[enabled][language-interface]' => FALSE,
     ];
     $this->drupalPostForm('admin/config/regional/language/detection', $edit, t('Save settings'));
 
@@ -148,6 +153,10 @@ class BlockLanguageTest extends WebTestBase {
     $this->assertNoText('Powered by Drupal', 'The body of the block does not appear on the page.');
     $this->drupalGet('node', ['query' => ['language' => 'fr']]);
     $this->assertText('Powered by Drupal', 'The body of the block appears on the page.');
+
+    // Re-login in order to clear the interface language stored in the session.
+    $this->drupalLogout();
+    $this->drupalLogin($this->adminUser);
 
     // Content language does not depend on session/request arguments.
     // It will fall back on English (site default) and not display the block.

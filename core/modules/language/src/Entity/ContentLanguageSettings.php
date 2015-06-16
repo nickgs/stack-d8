@@ -7,9 +7,8 @@
 
 namespace Drupal\language\Entity;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Config\Entity\ConfigEntityBase;
-use Drupal\Core\Config\Entity\ThirdPartySettingsTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\language\ContentLanguageSettingsException;
@@ -29,8 +28,6 @@ use Drupal\language\ContentLanguageSettingsInterface;
  * )
  */
 class ContentLanguageSettings extends ConfigEntityBase implements ContentLanguageSettingsInterface {
-
-  use ThirdPartySettingsTrait;
 
   /**
    * The id. Combination of $target_entity_type_id.$target_bundle.
@@ -203,7 +200,7 @@ class ContentLanguageSettings extends ConfigEntityBase implements ContentLanguag
       // If the target entity type uses entities to manage its bundles then
       // depend on the bundle entity.
       if (!$bundle_entity = $this->entityManager()->getStorage($bundle_entity_type_id)->load($this->target_bundle)) {
-        throw new \LogicException(String::format('Missing bundle entity, entity type %type, entity id %bundle.', array('%type' => $bundle_entity_type_id, '%bundle' => $this->target_bundle)));
+        throw new \LogicException(SafeMarkup::format('Missing bundle entity, entity type %type, entity id %bundle.', array('%type' => $bundle_entity_type_id, '%bundle' => $this->target_bundle)));
       }
       $this->addDependency('config', $bundle_entity->getConfigDependencyName());
     }

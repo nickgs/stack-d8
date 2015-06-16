@@ -7,7 +7,7 @@
 
 namespace Drupal\Core\Database\Driver\sqlite;
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Database\SchemaObjectExistsException;
 use Drupal\Core\Database\SchemaObjectDoesNotExistException;
 use Drupal\Core\Database\Schema as DatabaseSchema;
@@ -130,6 +130,11 @@ class Schema extends DatabaseSchema {
     else {
       $map = $this->getFieldTypeMap();
       $field['sqlite_type'] = $map[$field['type'] . ':' . $field['size']];
+
+      // Numeric fields with a specified scale have to be stored as floats.
+      if ($field['sqlite_type'] === 'NUMERIC' && isset($field['scale'])) {
+        $field['sqlite_type'] = 'FLOAT';
+      }
     }
 
     if (isset($field['type']) && $field['type'] == 'serial') {
@@ -160,8 +165,14 @@ class Schema extends DatabaseSchema {
     else {
       $sql = $name . ' ' . $spec['sqlite_type'];
 
-      if (in_array($spec['sqlite_type'], array('VARCHAR', 'TEXT')) && isset($spec['length'])) {
-        $sql .= '(' . $spec['length'] . ')';
+      if (in_array($spec['sqlite_type'], array('VARCHAR', 'TEXT'))) {
+        if (isset($spec['length'])) {
+          $sql .= '(' . $spec['length'] . ')';
+        }
+
+        if (isset($spec['binary']) && $spec['binary'] === FALSE) {
+          $sql .= ' COLLATE NOCASE_UTF8';
+        }
       }
 
       if (isset($spec['not null'])) {
@@ -201,6 +212,8 @@ class Schema extends DatabaseSchema {
     // database types back into schema types.
     // $map does not use drupal_static as its value never changes.
     static $map = array(
+      'varchar_ascii:normal' => 'VARCHAR',
+
       'varchar:normal'  => 'VARCHAR',
       'char:normal'     => 'CHAR',
 
@@ -271,20 +284,6 @@ class Schema extends DatabaseSchema {
     foreach ($statements as $statement) {
       $this->connection->query($statement);
     }
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function copyTable($source, $destination) {
-    if (!$this->tableExists($source)) {
-      throw new SchemaObjectDoesNotExistException(String::format("Cannot copy @source to @destination: table @source doesn't exist.", array('@source' => $source, '@destination' => $destination)));
-    }
-    if ($this->tableExists($destination)) {
-      throw new SchemaObjectExistsException(String::format("Cannot copy @source to @destination: table @destination already exists.", array('@source' => $source, '@destination' => $destination)));
-    }
-
-    $this->createTable($destination, $this->introspectSchema($source));
   }
 
   public function dropTable($table) {
@@ -497,6 +496,13 @@ class Schema extends DatabaseSchema {
     $new_schema = $old_schema;
 
     unset($new_schema['fields'][$field]);
+
+    // Handle possible primary key changes.
+    if (isset($new_schema['primary key']) && ($key = array_search($field, $new_schema['primary key'])) !== FALSE) {
+      unset($new_schema['primary key'][$key]);
+    }
+
+    // Handle possible index changes.
     foreach ($new_schema['indexes'] as $index => $fields) {
       foreach ($fields as $key => $field_name) {
         if ($field_name == $field) {

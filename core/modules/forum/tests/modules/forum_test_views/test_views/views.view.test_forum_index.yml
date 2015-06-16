@@ -61,7 +61,7 @@ display:
             suffix: ''
             target: ''
             nl2br: false
-            max_length: ''
+            max_length: 0
             word_boundary: true
             ellipsis: true
             more_link: false
@@ -86,7 +86,7 @@ display:
           type: yes-no
           type_custom_true: ''
           type_custom_false: ''
-          not: ''
+          not: false
           plugin_id: boolean
         comment_count:
           id: comment_count
@@ -114,7 +114,7 @@ display:
             suffix: ''
             target: ''
             nl2br: false
-            max_length: ''
+            max_length: 0
             word_boundary: true
             ellipsis: true
             more_link: false
@@ -141,12 +141,9 @@ display:
           decimal: .
           separator: ','
           format_plural: false
-          format_plural_singular: '1'
-          format_plural_plural: '@count'
+          format_plural_string: "1\x03@count"
           prefix: ''
           suffix: ''
           plugin_id: numeric
       filters: {  }
       sorts: {  }
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null

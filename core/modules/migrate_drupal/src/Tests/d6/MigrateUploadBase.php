@@ -7,12 +7,12 @@
 
 namespace Drupal\migrate_drupal\Tests\d6;
 
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Base class for file/upload migration tests.
  */
-abstract class MigrateUploadBase extends MigrateDrupalTestBase {
+abstract class MigrateUploadBase extends MigrateDrupal6TestBase {
 
   /**
    * {@inheritdoc}
@@ -24,6 +24,12 @@ abstract class MigrateUploadBase extends MigrateDrupalTestBase {
    */
   protected function setUp() {
     parent::setUp();
+
+    $this->installEntitySchema('file');
+    $this->installEntitySchema('node');
+    $this->installSchema('file', ['file_usage']);
+    $this->installSchema('node', ['node_access']);
+
     // Create new file entities.
     for ($i = 1; $i <= 3; $i++) {
       $file = entity_create('file', array(

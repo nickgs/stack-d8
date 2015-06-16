@@ -8,9 +8,11 @@
 namespace Drupal\system\Tests\Routing;
 
 use Drupal\Core\KeyValueStore\KeyValueMemoryFactory;
+use Drupal\Core\Path\CurrentPathStack;
 use Drupal\Core\State\State;
 use Drupal\simpletest\KernelTestBase;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Exception\RouteNotFoundException;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
@@ -19,7 +21,6 @@ use Drupal\Core\Routing\RouteProvider;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Routing\MatcherDumper;
 use Drupal\Tests\Core\Routing\RoutingFixtures;
-use Drupal\Tests\Core\Routing\NullRouteBuilder;
 
 /**
  * Confirm that the default route provider is working correctly.
@@ -36,23 +37,24 @@ class RouteProviderTest extends KernelTestBase {
   protected $fixtures;
 
   /**
-   * A null route builder to enable testing of the route provider.
-   *
-   * @var \Drupal\Core\Routing\RouteBuilderInterface
-   */
-  protected $routeBuilder;
-
-  /**
    * The state.
    *
    * @var \Drupal\Core\State\StateInterface
    */
   protected $state;
 
+  /**
+   * The current path.
+   *
+   * @var \Drupal\Core\Path\CurrentPathStack
+   */
+  protected $currentPath;
+
   protected function setUp() {
+    parent::setUp();
     $this->fixtures = new RoutingFixtures();
-    $this->routeBuilder = new NullRouteBuilder();
     $this->state = new State(new KeyValueMemoryFactory());
+    $this->currentPath = new CurrentPathStack(new RequestStack());
   }
 
   protected function tearDown() {
@@ -67,7 +69,7 @@ class RouteProviderTest extends KernelTestBase {
   public function testCandidateOutlines() {
 
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $parts = array('node', '5', 'edit');
 
@@ -90,7 +92,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testExactPathMatch() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -114,7 +116,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathMatch() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -143,7 +145,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathMatchTrailingSlash() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -172,7 +174,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathMatchDefaults() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -210,7 +212,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathMatchDefaultsCollision() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -249,7 +251,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathMatchDefaultsCollision2() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -288,7 +290,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   public function testOutlinePathMatchZero() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -323,7 +325,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   function testOutlinePathNoMatch() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -344,11 +346,11 @@ class RouteProviderTest extends KernelTestBase {
   }
 
   /**
-   * Confirms that _system_path attribute overrides request path.
+   * Ensures a path set on the current path services overrides the request one.
    */
-  function testSystemPathMatch() {
+  function testCurrentPath() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -357,7 +359,7 @@ class RouteProviderTest extends KernelTestBase {
     $dumper->dump();
 
     $request = Request::create('/path/one', 'GET');
-    $request->attributes->set('_system_path', 'path/two');
+    $this->currentPath->setPath('/path/two', $request);
 
     $routes_by_pattern = $provider->getRoutesByPattern('/path/two');
     $routes = $provider->getRouteCollectionForRequest($request);
@@ -371,9 +373,9 @@ class RouteProviderTest extends KernelTestBase {
   /**
    * Test RouteProvider::getRouteByName() and RouteProvider::getRoutesByNames().
    */
-  protected function testRouteByName() {
+  public function testRouteByName() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
 
@@ -408,7 +410,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   public function testGetRoutesByPatternWithLongPatterns() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
     // This pattern has only 3 parts, so we will get candidates, but no routes,
@@ -466,7 +468,7 @@ class RouteProviderTest extends KernelTestBase {
    */
   public function testGetRoutesPaged() {
     $connection = Database::getConnection();
-    $provider = new RouteProvider($connection, $this->routeBuilder, $this->state, 'test_routes');
+    $provider = new RouteProvider($connection, $this->state, $this->currentPath, 'test_routes');
 
     $this->fixtures->createTables($connection);
     $dumper = new MatcherDumper($connection, $this->state, 'test_routes');

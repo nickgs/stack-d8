@@ -7,7 +7,6 @@
 
 namespace Drupal\views_ui\Tests;
 
-use Drupal\Component\Utility\String;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\views\Entity\View;
 use Drupal\views\Views;
@@ -38,7 +37,7 @@ class ViewEditTest extends UITestBase {
     $this->clickLink(t('Delete view'));
     $this->assertUrl('admin/structure/views/view/test_view/delete');
     $this->drupalPostForm(NULL, array(), t('Delete'));
-    $this->assertRaw(t('View %name deleted', array('%name' => $view->label())));
+    $this->assertRaw(t('The view %name has been deleted.', array('%name' => $view->label())));
 
     $this->assertUrl('admin/structure/views');
     $view = $this->container->get('entity.manager')->getStorage('view')->load('test_view');
@@ -70,6 +69,10 @@ class ViewEditTest extends UITestBase {
     $machine_name_edit_url = 'admin/structure/views/nojs/display/test_view/test_1/display_id';
     $error_text = t('Display name must be letters, numbers, or underscores only.');
 
+    // Test that potential invalid display ID requests are detected
+    $this->drupalGet('admin/structure/views/ajax/handler/test_view/fake_display_name/filter/title');
+    $this->assertText('Invalid display id fake_display_name');
+
     $edit = array('display_id' => 'test 1');
     $this->drupalPostForm($machine_name_edit_url, $edit, 'Apply');
     $this->assertText($error_text);
@@ -100,39 +103,108 @@ class ViewEditTest extends UITestBase {
     foreach ($test_views as $view_name => $display) {
       $this->drupalGet('admin/structure/views/view/' . $view_name);
       $this->assertResponse(200);
-      $langcode_url = 'admin/structure/views/nojs/display/' . $view_name . '/' . $display . '/field_langcode';
+      $langcode_url = 'admin/structure/views/nojs/display/' . $view_name . '/' . $display . '/rendering_language';
       $this->assertNoLinkByHref($langcode_url);
-      $this->assertNoLink(t('Language selected for !type', array('!type' => t('Content'))));
+      $this->assertNoLink(t('!type language selected for page', array('!type' => t('Content'))));
+      $this->assertNoLink(t('Content language of view row'));
     }
 
     // Make the site multilingual and test the options again.
-    $this->container->get('module_installer')->install(array('language'));
+    $this->container->get('module_installer')->install(array('language', 'content_translation'));
     ConfigurableLanguage::createFromLangcode('hu')->save();
     $this->resetAll();
     $this->rebuildContainer();
 
-    // Language options should now exist with content language defaults.
+    // Language options should now exist with entity language the default.
     foreach ($test_views as $view_name => $display) {
       $this->drupalGet('admin/structure/views/view/' . $view_name);
       $this->assertResponse(200);
-      $langcode_url = 'admin/structure/views/nojs/display/' . $view_name . '/' . $display . '/field_langcode';
+      $langcode_url = 'admin/structure/views/nojs/display/' . $view_name . '/' . $display . '/rendering_language';
       if ($view_name == 'test_view') {
         $this->assertNoLinkByHref($langcode_url);
-        $this->assertNoLink(t('Language selected for !type', array('!type' => t('Content'))));
+        $this->assertNoLink(t('!type language selected for page', array('!type' => t('Content'))));
+        $this->assertNoLink(t('Content language of view row'));
       }
       else {
         $this->assertLinkByHref($langcode_url);
-        $this->assertLink(t('Language selected for !type', array('!type' => t('Content'))));
+        $this->assertNoLink(t('!type language selected for page', array('!type' => t('Content'))));
+        $this->assertLink(t('Content language of view row'));
       }
 
       $this->drupalGet($langcode_url);
       $this->assertResponse(200);
       if ($view_name == 'test_view') {
-        $this->assertText(t("You don't have translatable entity types."));
+        $this->assertText(t('The view is not based on a translatable entity type or the site is not multilingual.'));
       }
       else {
-        $this->assertFieldByName('field_langcode', '***LANGUAGE_language_content***');
-        $this->assertFieldByName('field_langcode_add_to_query', TRUE);
+        $this->assertFieldByName('rendering_language', '***LANGUAGE_entity_translation***');
+        // Test that the order of the language list is similar to other language
+        // lists, such as in Views UI.
+        $expected_elements = array(
+          '***LANGUAGE_entity_translation***',
+          '***LANGUAGE_entity_default***',
+          '***LANGUAGE_site_default***',
+          '***LANGUAGE_language_interface***',
+          'en',
+          'hu',
+        );
+        $elements = $this->xpath('//select[@id="edit-rendering-language"]/option');
+        // Compare values inside the option elements with expected values.
+        for ($i = 0; $i < count($elements); $i++) {
+          $this->assertEqual($elements[$i]->attributes()->{'value'}, $expected_elements[$i]);
+        }
+
+        // Check that the selected values are respected even we they are not
+        // supposed to be listed.
+        // Give permission to edit languages to authenticated users.
+        $edit = [
+          'authenticated[administer languages]' => TRUE,
+        ];
+        $this->drupalPostForm('/admin/people/permissions', $edit, t('Save permissions'));
+        // Enable Content language negotiation so we have one more item
+        // to select.
+        $edit = [
+          'language_content[configurable]' => TRUE,
+        ];
+        $this->drupalPostForm('admin/config/regional/language/detection', $edit, t('Save settings'));
+
+        // Choose the new negotiation as the rendering language.
+        $edit = [
+          'rendering_language' => '***LANGUAGE_language_content***',
+        ];
+        $this->drupalPostForm('/admin/structure/views/nojs/display/' . $view_name . '/' . $display . '/rendering_language', $edit, t('Apply'));
+
+        // Disable language content negotiation.
+        $edit = [
+          'language_content[configurable]' => FALSE,
+        ];
+        $this->drupalPostForm('admin/config/regional/language/detection', $edit, t('Save settings'));
+
+        // Check that the previous selection is listed and selected.
+        $this->drupalGet($langcode_url);
+        $element = $this->xpath('//select[@id="edit-rendering-language"]/option[@value="***LANGUAGE_language_content***" and @selected="selected"]');
+        $this->assertFalse(empty($element), 'Current selection is not lost');
+
+        // Check the order for the langcode filter.
+        $langcode_url = 'admin/structure/views/nojs/handler/' . $view_name . '/' . $display . '/filter/langcode';
+        $this->drupalGet($langcode_url);
+        $this->assertResponse(200);
+
+        $expected_elements = array(
+          'all',
+          '***LANGUAGE_site_default***',
+          '***LANGUAGE_language_interface***',
+          '***LANGUAGE_language_content***',
+          'en',
+          'hu',
+          'und',
+          'zxx',
+        );
+        $elements = $this->xpath('//div[@id="edit-options-value"]//input');
+        // Compare values inside the option elements with expected values.
+        for ($i = 0; $i < count($elements); $i++) {
+          $this->assertEqual($elements[$i]->attributes()->{'value'}, $expected_elements[$i]);
+        }
       }
     }
   }
@@ -142,7 +214,7 @@ class ViewEditTest extends UITestBase {
    */
   public function testRelationRepresentativeNode() {
     // Populate and submit the form.
-    $edit["name[taxonomy_term_data.tid_representative]"] = TRUE;
+    $edit["name[taxonomy_term_field_data.tid_representative]"] = TRUE;
     $this->drupalPostForm('admin/structure/views/nojs/add-handler/test_groupwise_term_ui/default/relationship', $edit, 'Add and configure relationships');
     // Apply changes.
     $edit = array();

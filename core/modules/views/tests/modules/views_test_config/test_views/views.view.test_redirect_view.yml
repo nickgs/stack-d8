@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies:
   module:
@@ -9,7 +9,7 @@ label: test_redirect_view
 module: views
 description: ''
 tag: ''
-base_table: node
+base_table: node_field_data
 base_field: nid
 core: 8.x
 display:
@@ -54,8 +54,7 @@ display:
             html: false
           hide_empty: false
           empty_zero: false
-          link_to_node: true
-          plugin_id: node
+          plugin_id: field
           entity_type: node
           entity_field: title
       filters:
@@ -80,8 +79,6 @@ display:
           entity_type: node
           entity_field: created
       title: test_redirect_view
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
   page_1:
     display_plugin: page
     id: page_1
@@ -89,5 +86,3 @@ display:
     position: null
     display_options:
       path: test-redirect-view
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null

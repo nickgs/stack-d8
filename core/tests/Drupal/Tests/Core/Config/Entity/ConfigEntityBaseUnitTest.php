@@ -7,9 +7,7 @@
 
 namespace Drupal\Tests\Core\Config\Entity;
 
-use Drupal\Component\Plugin\ConfigurablePluginInterface;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
-use Drupal\Component\Plugin\PluginBase;
 use Drupal\Core\Language\Language;
 use Drupal\Tests\Core\Plugin\Fixtures\TestConfigurablePlugin;
 use Drupal\Tests\UnitTestCase;
@@ -30,7 +28,7 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
   /**
    * The entity type used for testing.
    *
-   * @var \Drupal\Core\Entity\EntityTypeInterface|\PHPUnit_Framework_MockObject_MockObject
+   * @var \Drupal\Core\Config\Entity\ConfigEntityTypeInterface|\PHPUnit_Framework_MockObject_MockObject
    */
   protected $entityType;
 
@@ -102,7 +100,7 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
     );
     $this->entityTypeId = $this->randomMachineName();
     $this->provider = $this->randomMachineName();
-    $this->entityType = $this->getMock('\Drupal\Core\Entity\EntityTypeInterface');
+    $this->entityType = $this->getMock('\Drupal\Core\Config\Entity\ConfigEntityTypeInterface');
     $this->entityType->expects($this->any())
       ->method('getProvider')
       ->will($this->returnValue($this->provider));
@@ -291,14 +289,20 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
 
   /**
    * @covers ::calculateDependencies
+   * @covers ::onDependencyRemoval
    */
   public function testCalculateDependenciesWithThirdPartySettings() {
-    $this->entity = $this->getMockForAbstractClass('\Drupal\Tests\Core\Config\Entity\Fixtures\ConfigEntityBaseWithThirdPartySettings', array(array(), $this->entityTypeId));
+    $this->entity = $this->getMockForAbstractClass('\Drupal\Core\Config\Entity\ConfigEntityBase', array(array(), $this->entityTypeId));
     $this->entity->setThirdPartySetting('test_provider', 'test', 'test');
     $this->entity->setThirdPartySetting('test_provider2', 'test', 'test');
     $this->entity->setThirdPartySetting($this->provider, 'test', 'test');
 
     $this->assertEquals(array('test_provider', 'test_provider2'), $this->entity->calculateDependencies()['module']);
+    $changed = $this->entity->onDependencyRemoval(['module' => ['test_provider2']]);
+    $this->assertTrue($changed, 'Calling onDependencyRemoval with an existing third party dependency provider returns TRUE.');
+    $changed = $this->entity->onDependencyRemoval(['module' => ['test_provider3']]);
+    $this->assertFalse($changed, 'Calling onDependencyRemoval with a non-existing third party dependency provider returns FALSE.');
+    $this->assertEquals(array('test_provider'), $this->entity->calculateDependencies()['module']);
   }
 
   /**
@@ -311,6 +315,15 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
     $this->assertSame($this->id, $this->entity->getOriginalId());
     $this->assertSame($this->entity, $this->entity->setOriginalId($new_id));
     $this->assertSame($new_id, $this->entity->getOriginalId());
+
+    // Check that setOriginalId() does not change the entity "isNew" status.
+    $this->assertFalse($this->entity->isNew());
+    $this->entity->setOriginalId($this->randomMachineName());
+    $this->assertFalse($this->entity->isNew());
+    $this->entity->enforceIsNew();
+    $this->assertTrue($this->entity->isNew());
+    $this->entity->setOriginalId($this->randomMachineName());
+    $this->assertTrue($this->entity->isNew());
   }
 
   /**
@@ -450,9 +463,52 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
    * @covers ::toArray
    */
   public function testToArray() {
+    $this->typedConfigManager->expects($this->never())
+      ->method('getDefinition');
+    $this->entityType->expects($this->any())
+      ->method('getPropertiesToExport')
+      ->willReturn(['id' => 'configId', 'dependencies' => 'dependencies']);
+    $properties = $this->entity->toArray();
+    $this->assertInternalType('array', $properties);
+    $this->assertEquals(array('configId' => $this->entity->id(), 'dependencies' => array()), $properties);
+  }
+
+  /**
+   * @covers ::toArray
+   */
+  public function testToArrayIdKey() {
+    $entity = $this->getMockForAbstractClass('\Drupal\Core\Config\Entity\ConfigEntityBase', [[], $this->entityTypeId], '', TRUE, TRUE, TRUE, ['id', 'get']);
+    $entity->expects($this->atLeastOnce())
+      ->method('id')
+      ->willReturn($this->id);
+    $entity->expects($this->once())
+      ->method('get')
+      ->with('dependencies')
+      ->willReturn([]);
+    $this->typedConfigManager->expects($this->never())
+      ->method('getDefinition');
+    $this->entityType->expects($this->any())
+      ->method('getPropertiesToExport')
+      ->willReturn(['id' => 'configId', 'dependencies' => 'dependencies']);
+    $this->entityType->expects($this->once())
+      ->method('getKey')
+      ->with('id')
+      ->willReturn('id');
+    $properties = $entity->toArray();
+    $this->assertInternalType('array', $properties);
+    $this->assertEquals(['configId' => $entity->id(), 'dependencies' => []], $properties);
+  }
+
+  /**
+   * @covers ::toArray
+   */
+  public function testToArraySchemaFallback() {
     $this->typedConfigManager->expects($this->once())
       ->method('getDefinition')
       ->will($this->returnValue(array('mapping' => array('id' => '', 'dependencies' => ''))));
+    $this->entityType->expects($this->any())
+      ->method('getPropertiesToExport')
+      ->willReturn([]);
     $properties = $this->entity->toArray();
     $this->assertInternalType('array', $properties);
     $this->assertEquals(array('id' => $this->entity->id(), 'dependencies' => array()), $properties);
@@ -464,7 +520,44 @@ class ConfigEntityBaseUnitTest extends UnitTestCase {
    * @expectedException \Drupal\Core\Config\Schema\SchemaIncompleteException
    */
   public function testToArrayFallback() {
+    $this->entityType->expects($this->any())
+      ->method('getPropertiesToExport')
+      ->willReturn([]);
     $this->entity->toArray();
+  }
+
+  /**
+   * @covers ::getThirdPartySetting
+   * @covers ::setThirdPartySetting
+   * @covers ::getThirdPartySettings
+   * @covers ::unsetThirdPartySetting
+   * @covers ::getThirdPartyProviders
+   */
+  public function testThirdPartySettings() {
+    $key = 'test';
+    $third_party = 'test_provider';
+    $value = $this->getRandomGenerator()->string();
+
+    // Test getThirdPartySetting() with no settings.
+    $this->assertEquals($value, $this->entity->getThirdPartySetting($third_party, $key, $value));
+    $this->assertNull($this->entity->getThirdPartySetting($third_party, $key));
+
+    // Test setThirdPartySetting().
+    $this->entity->setThirdPartySetting($third_party, $key, $value);
+    $this->assertEquals($value, $this->entity->getThirdPartySetting($third_party, $key));
+    $this->assertEquals($value, $this->entity->getThirdPartySetting($third_party, $key, $this->randomGenerator->string()));
+
+    // Test getThirdPartySettings().
+    $this->entity->setThirdPartySetting($third_party, 'test2', 'value2');
+    $this->assertEquals(array($key => $value, 'test2' => 'value2'), $this->entity->getThirdPartySettings($third_party));
+
+    // Test getThirdPartyProviders().
+    $this->entity->setThirdPartySetting('test_provider2', $key, $value);
+    $this->assertEquals(array($third_party, 'test_provider2'), $this->entity->getThirdPartyProviders());
+
+    // Test unsetThirdPartyProviders().
+    $this->entity->unsetThirdPartySetting('test_provider2', $key);
+    $this->assertEquals(array($third_party), $this->entity->getThirdPartyProviders());
   }
 
 }

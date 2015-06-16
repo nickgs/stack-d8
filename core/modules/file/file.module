@@ -6,7 +6,6 @@
  */
 
 use Drupal\Component\Utility\SafeMarkup;
-use Drupal\Component\Utility\String;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\Element;
@@ -31,11 +30,11 @@ function file_help($route_name, RouteMatchInterface $route_match) {
     case 'help.page.file':
       $output = '';
       $output .= '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The File module allows you to create fields that contain files. See the <a href="!field">Field module help</a> and the <a href="!field_ui">Field UI help</a> pages for general information on fields and how to create and manage them. For more information, see the <a href="!file_documentation">online documentation for the File module</a>.', array('!field' => \Drupal::url('help.page', array('name' => 'field')), '!field_ui' => \Drupal::url('help.page', array('name' => 'field_ui')), '!file_documentation' => 'https://drupal.org/documentation/modules/file')) . '</p>';
+      $output .= '<p>' . t('The File module allows you to create fields that contain files. See the <a href="!field">Field module help</a> and the <a href="!field_ui">Field UI help</a> pages for general information on fields and how to create and manage them. For more information, see the <a href="!file_documentation">online documentation for the File module</a>.', array('!field' => \Drupal::url('help.page', array('name' => 'field')), '!field_ui' => (\Drupal::moduleHandler()->moduleExists('field_ui')) ? \Drupal::url('help.page', array('name' => 'field_ui')) :'#', '!file_documentation' => 'https://www.drupal.org/documentation/modules/file')) . '</p>';
       $output .= '<h3>' . t('Uses') . '</h3>';
       $output .= '<dl>';
       $output .= '<dt>' . t('Managing and displaying file fields') . '</dt>';
-      $output .= '<dd>' . t('The <em>settings</em> and the <em>display</em> of the file field can be configured separately. See the <a href="!field_ui">Field UI help</a> for more information on how to manage fields and their display.', array('!field_ui' => \Drupal::url('help.page', array('name' => 'field_ui')))) . '</dd>';
+      $output .= '<dd>' . t('The <em>settings</em> and the <em>display</em> of the file field can be configured separately. See the <a href="!field_ui">Field UI help</a> for more information on how to manage fields and their display.', array('!field_ui' => (\Drupal::moduleHandler()->moduleExists('field_ui')) ? \Drupal::url('help.page', array('name' => 'field_ui')) : '#')) . '</dd>';
       $output .= '<dt>' . t('Allowing file extensions') . '</dt>';
       $output .= '<dd>' . t('In the field settings, you can define the allowed file extensions (for example <em>pdf docx psd</em>) for the files that will be uploaded with the file field.') . '</dd>';
       $output .= '<dt>' . t('Storing files ') . '</dt>';
@@ -152,8 +151,8 @@ function file_copy(FileInterface $source, $destination = NULL, $replace = FILE_E
     $file->setFileUri($uri);
     $file->setFilename(drupal_basename($uri));
     // If we are replacing an existing file re-use its database record.
-    // @todo Do not create a new entity in order to update it, see
-    //   https://drupal.org/node/2241865
+    // @todo Do not create a new entity in order to update it. See
+    //   https://www.drupal.org/node/2241865.
     if ($replace == FILE_EXISTS_REPLACE) {
       $existing_files = entity_load_multiple_by_properties('file', array('uri' => $uri));
       if (count($existing_files)) {
@@ -499,8 +498,8 @@ function file_save_data($data, $destination = NULL, $replace = FILE_EXISTS_RENAM
       'status' => FILE_STATUS_PERMANENT,
     ));
     // If we are replacing an existing file re-use its database record.
-    // @todo Do not create a new entity in order to update it, see
-    //   https://drupal.org/node/2241865
+    // @todo Do not create a new entity in order to update it. See
+    //   https://www.drupal.org/node/2241865.
     if ($replace == FILE_EXISTS_REPLACE) {
       $existing_files = entity_load_multiple_by_properties('file', array('uri' => $uri));
       if (count($existing_files)) {
@@ -590,6 +589,20 @@ function file_file_download($uri) {
   }
   if (!isset($file)) {
     return;
+  }
+
+  // Find out if a temporary file is still used in the system.
+  if ($file->isTemporary()) {
+    $usage = \Drupal::service('file.usage')->listUsage($file);
+    if (empty($usage) && $file->getOwnerId() != \Drupal::currentUser()->id()) {
+      // Deny access to temporary files without usage that are not owned by the
+      // same user. This prevents the security issue that a private file that
+      // was protected by field permissions becomes available after its usage
+      // was removed and before it is actually deleted from the file system.
+      // Modules that depend on this behavior should make the file permanent
+      // instead.
+      return -1;
+    }
   }
 
   // Find out which (if any) fields of this type contain the file.
@@ -756,7 +769,7 @@ function file_save_upload($form_field_name, $validators = array(), $destination 
       'uri' => $file_info->getRealPath(),
       'filesize' => $file_info->getSize(),
     );
-    $values['filemime'] = file_get_mimetype($values['filename']);
+    $values['filemime'] = \Drupal::service('file.mime_type.guesser')->guess($values['filename']);
     $file = entity_create('file', $values);
 
     $extensions = '';
@@ -829,7 +842,7 @@ function file_save_upload($form_field_name, $validators = array(), $destination 
       continue;
     }
 
-    // Add in our check of the the file name length.
+    // Add in our check of the file name length.
     $validators['file_validate_name_length'] = array();
 
     // Call the validation functions specified by this function's caller.
@@ -868,8 +881,8 @@ function file_save_upload($form_field_name, $validators = array(), $destination 
     drupal_chmod($file->getFileUri());
 
     // If we are replacing an existing file re-use its database record.
-    // @todo Do not create a new entity in order to update it, see
-    //   https://drupal.org/node/2241865
+    // @todo Do not create a new entity in order to update it. See
+    //   https://www.drupal.org/node/2241865.
     if ($replace == FILE_EXISTS_REPLACE) {
       $existing_files = entity_load_multiple_by_properties('file', array('uri' => $file->getFileUri()));
       if (count($existing_files)) {
@@ -952,15 +965,15 @@ function file_tokens($type, $tokens, array $data = array(), array $options = arr
 
         // Essential file data
         case 'name':
-          $replacements[$original] = $sanitize ? String::checkPlain($file->getFilename()) : $file->getFilename();
+          $replacements[$original] = $sanitize ? SafeMarkup::checkPlain($file->getFilename()) : $file->getFilename();
           break;
 
         case 'path':
-          $replacements[$original] = $sanitize ? String::checkPlain($file->getFileUri()) : $file->getFileUri();
+          $replacements[$original] = $sanitize ? SafeMarkup::checkPlain($file->getFileUri()) : $file->getFileUri();
           break;
 
         case 'mime':
-          $replacements[$original] = $sanitize ? String::checkPlain($file->getMimeType()) : $file->getMimeType();
+          $replacements[$original] = $sanitize ? SafeMarkup::checkPlain($file->getMimeType()) : $file->getMimeType();
           break;
 
         case 'size':
@@ -968,7 +981,7 @@ function file_tokens($type, $tokens, array $data = array(), array $options = arr
           break;
 
         case 'url':
-          $replacements[$original] = $sanitize ? String::checkPlain(file_create_url($file->getFileUri())) : file_create_url($file->getFileUri());
+          $replacements[$original] = $sanitize ? SafeMarkup::checkPlain(file_create_url($file->getFileUri())) : file_create_url($file->getFileUri());
           break;
 
         // These tokens are default variations on the chained tokens handled below.
@@ -982,7 +995,7 @@ function file_tokens($type, $tokens, array $data = array(), array $options = arr
 
         case 'owner':
           $name = $file->getOwner()->label();
-          $replacements[$original] = $sanitize ? String::checkPlain($name) : $name;
+          $replacements[$original] = $sanitize ? SafeMarkup::checkPlain($name) : $name;
           break;
       }
     }
@@ -1193,7 +1206,6 @@ function template_preprocess_file_managed_file(&$variables) {
   if (!empty($element['#attributes']['class'])) {
     $variables['attributes']['class'] = (array) $element['#attributes']['class'];
   }
-  $variables['attributes']['class'][] = 'form-managed-file';
 }
 
 /**
@@ -1227,7 +1239,7 @@ function template_preprocess_file_link(&$variables) {
   }
   else {
     $link_text = $variables['description'];
-    $options['attributes']['title'] = String::checkPlain($file_entity->getFilename());
+    $options['attributes']['title'] = SafeMarkup::checkPlain($file_entity->getFilename());
   }
 
   // Classes to add to the file field for icons.

@@ -9,6 +9,7 @@ namespace Drupal\Core\Field\Plugin\Field\FieldType;
 
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
+use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\TypedData\DataDefinition;
 
 /**
@@ -18,6 +19,7 @@ use Drupal\Core\TypedData\DataDefinition;
  *   id = "float",
  *   label = @Translation("Number (float)"),
  *   description = @Translation("This field stores a number in the database in a floating point format."),
+ *   category = @Translation("Number"),
  *   default_widget = "number",
  *   default_formatter = "number_decimal"
  * )
@@ -46,6 +48,18 @@ class FloatItem extends NumericItemBase {
         ),
       ),
     );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function fieldSettingsForm(array $form, FormStateInterface $form_state) {
+    $element = parent::fieldSettingsForm($form, $form_state);
+
+    $element['min']['#step'] = 'any';
+    $element['max']['#step'] = 'any';
+
+    return $element;
   }
 
   /**

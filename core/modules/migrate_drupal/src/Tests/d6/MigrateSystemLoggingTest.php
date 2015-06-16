@@ -9,14 +9,14 @@ namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\migrate\MigrateExecutable;
 use Drupal\config\Tests\SchemaCheckTestTrait;
-use Drupal\migrate_drupal\Tests\MigrateDrupalTestBase;
+use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * Upgrade error_level variable to system.logging.yml.
  *
  * @group migrate_drupal
  */
-class MigrateSystemLoggingTest extends MigrateDrupalTestBase {
+class MigrateSystemLoggingTest extends MigrateDrupal6TestBase {
 
   use SchemaCheckTestTrait;
 
@@ -39,7 +39,7 @@ class MigrateSystemLoggingTest extends MigrateDrupalTestBase {
    */
   public function testSystemLogging() {
     $config = $this->config('system.logging');
-    $this->assertIdentical($config->get('error_level'), 'some');
+    $this->assertIdentical('some', $config->get('error_level'));
     $this->assertConfigSchema(\Drupal::service('config.typed'), 'system.logging', $config->get());
   }
 

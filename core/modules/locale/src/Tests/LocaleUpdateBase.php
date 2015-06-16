@@ -8,8 +8,9 @@
 namespace Drupal\locale\Tests;
 
 use Drupal\Core\StreamWrapper\PublicStream;
+use Drupal\Core\Url;
 use Drupal\simpletest\WebTestBase;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 
 /**
  * Base class for testing updates to string translations.
@@ -60,7 +61,7 @@ abstract class LocaleUpdateBase extends WebTestBase {
     // Update module should not go out to d.o to check for updates. We override
     // the url to the default update_test xml path. But without providing
     // a mock xml file, no update data will be found.
-    $this->config('update.settings')->set('fetch.url', _url('update-test', array('absolute' => TRUE)))->save();
+    $this->config('update.settings')->set('fetch.url', Url::fromRoute('update_test.update_test', [], ['absolute' => TRUE])->toString())->save();
 
     // Setup timestamps to identify old and new translation sources.
     $this->timestampOld = REQUEST_TIME - 300;
@@ -97,7 +98,7 @@ abstract class LocaleUpdateBase extends WebTestBase {
     $edit = array('predefined_langcode' => $langcode);
     $this->drupalPostForm('admin/config/regional/language/add', $edit, t('Add language'));
     $this->container->get('language_manager')->reset();
-    $this->assertTrue(\Drupal::languageManager()->getLanguage($langcode), String::format('Language %langcode added.', array('%langcode' => $langcode)));
+    $this->assertTrue(\Drupal::languageManager()->getLanguage($langcode), SafeMarkup::format('Language %langcode added.', array('%langcode' => $langcode)));
   }
 
   /**

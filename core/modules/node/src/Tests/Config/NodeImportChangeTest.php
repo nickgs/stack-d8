@@ -7,6 +7,7 @@
 
 namespace Drupal\node\Tests\Config;
 
+use Drupal\node\Entity\NodeType;
 use Drupal\simpletest\KernelTestBase;
 
 /**
@@ -49,14 +50,14 @@ class NodeImportChangeTest extends KernelTestBase {
     $node_type = $active->read($node_type_config_name);
     $new_label = 'Test update import field';
     $node_type['name'] = $new_label;
-    // Save as files in the the staging directory.
+    // Save as files in the staging directory.
     $staging->write($node_type_config_name, $node_type);
 
     // Import the content of the staging directory.
     $this->configImporter()->import();
 
     // Check that the updated config was correctly imported.
-    $node_type = entity_load('node_type', $node_type_id);
+    $node_type = NodeType::load($node_type_id);
     $this->assertEqual($node_type->label(), $new_label, 'Node type name has been updated.');
   }
 

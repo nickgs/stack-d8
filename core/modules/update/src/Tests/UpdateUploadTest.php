@@ -7,6 +7,9 @@
 
 namespace Drupal\update\Tests;
 
+use Drupal\Core\Updater\Updater;
+use Drupal\Core\Url;
+
 /**
  * Tests the Update Manager module's upload and extraction functionality.
  *
@@ -80,7 +83,7 @@ class UpdateUploadTest extends UpdateTestBase {
       ->set('xml_map', array('drupal' => '0.2-sec'))
       ->save();
     $this->config('update.settings')
-      ->set('fetch.url', _url('update-test', array('absolute' => TRUE)))
+      ->set('fetch.url', Url::fromRoute('update_test.update_test')->setAbsolute()->toString())
       ->save();
     // Initialize the update status.
     $this->drupalGet('admin/reports/updates');
@@ -109,4 +112,16 @@ class UpdateUploadTest extends UpdateTestBase {
     $this->drupalGet('admin/update/ready');
     $this->assertNoText(t('There is a security update available for your version of Drupal.'));
   }
+
+  /**
+   * Tests only an *.info.yml file are detected without supporting files.
+   */
+  public function testUpdateDirectory() {
+    $type = Updater::getUpdaterFromDirectory(\Drupal::root() . '/core/modules/update/tests/modules/aaa_update_test');
+    $this->assertEqual($type, 'Drupal\\Core\\Updater\\Module', 'Detected a Module');
+
+    $type = Updater::getUpdaterFromDirectory(\Drupal::root() . '/core/modules/update/tests/themes/update_test_basetheme');
+    $this->assertEqual($type, 'Drupal\\Core\\Updater\\Theme', 'Detected a Theme.');
+  }
+
 }

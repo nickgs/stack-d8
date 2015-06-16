@@ -20,8 +20,7 @@ class DrupalKernelTrustedHostsTest extends UnitTestCase {
   /**
    * Tests hostname validation with settings.
    *
-   * @covers ::setupTrustedHosts()
-   *
+   * @covers ::setupTrustedHosts
    * @dataProvider providerTestTrustedHosts
    */
   public function testTrustedHosts($host, $server_name, $message, $expected = FALSE) {
@@ -48,6 +47,8 @@ class DrupalKernelTrustedHostsTest extends UnitTestCase {
 
     // Reset the trusted hosts because it is statically stored on the request.
     $method->invoke(null, $request, []);
+    // Reset the request factory because it is statically stored on the request.
+    Request::setFactory(NULL);
   }
 
   /**

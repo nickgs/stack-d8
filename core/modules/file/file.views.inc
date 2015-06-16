@@ -23,7 +23,7 @@ function file_field_views_data(FieldStorageConfigInterface $field_storage) {
       'id' => 'standard',
       'base' => 'file_managed',
       'entity type' => 'file',
-      'base field' => 'target_id',
+      'base field' => 'fid',
       'label' => t('file from !field_name', array('!field_name' => $field_storage->getName())),
     );
   }
@@ -37,7 +37,7 @@ function file_field_views_data(FieldStorageConfigInterface $field_storage) {
  * Views integration to provide reverse relationships on file fields.
  */
 function file_field_views_data_views_data_alter(array &$data, FieldStorageConfigInterface $field_storage) {
-  $entity_type_id = $field_storage->entity_type;
+  $entity_type_id = $field_storage->getTargetEntityTypeId();
   $entity_manager = \Drupal::entityManager();
   $entity_type = $entity_manager->getDefinition($entity_type_id);
   $field_name = $field_storage->getName();
@@ -49,15 +49,16 @@ function file_field_views_data_views_data_alter(array &$data, FieldStorageConfig
 
   $data['file_managed'][$pseudo_field_name]['relationship'] = array(
     'title' => t('@entity using @field', array('@entity' => $entity_type->getLabel(), '@field' => $label)),
+    'label' => t('@field_name', array('@field_name' => $field_name)),
+    'group' => $entity_type->getLabel(),
     'help' => t('Relate each @entity with a @field set to the file.', array('@entity' => $entity_type->getLabel(), '@field' => $label)),
     'id' => 'entity_reverse',
-    'field_name' => $field_name,
+    'base' => $entity_type->getDataTable() ?: $entity_type->getBaseTable(),
     'entity_type' => $entity_type_id,
+    'base field' => $entity_type->getKey('id'),
+    'field_name' => $field_name,
     'field table' => $table_mapping->getDedicatedDataTableName($field_storage),
     'field field' => $field_name . '_target_id',
-    'base' => $entity_type->getBaseTable(),
-    'base field' => $entity_type->getKey('id'),
-    'label' => t('!field_name', array('!field_name' => $field_name)),
     'join_extra' => array(
       0 => array(
         'field' => 'deleted',

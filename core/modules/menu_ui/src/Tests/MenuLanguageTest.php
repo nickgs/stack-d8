@@ -27,15 +27,10 @@ class MenuLanguageTest extends MenuWebTestBase {
    */
   public static $modules = array('language');
 
-  protected $admin_user;
-  protected $menu;
-
   protected function setUp() {
     parent::setUp();
 
-    // Create user.
-    $this->admin_user = $this->drupalCreateUser(array('access administration pages', 'administer menu'));
-    $this->drupalLogin($this->admin_user);
+    $this->drupalLogin($this->drupalCreateUser(array('access administration pages', 'administer menu')));
 
     // Add some custom languages.
     foreach (array('aa', 'bb', 'cc', 'cs') as $language_code) {
@@ -70,13 +65,13 @@ class MenuLanguageTest extends MenuWebTestBase {
     $this->assertOptionSelected('edit-langcode', $edit['langcode'], 'The menu language was correctly selected.');
 
     // Test menu link language.
-    $link_path = '<front>';
+    $link_path = '/';
 
     // Add a menu link.
     $link_title = $this->randomString();
     $edit = array(
       'title[0][value]' => $link_title,
-      'url' => $link_path,
+      'link[0][uri]' => $link_path,
     );
     $this->drupalPostForm("admin/structure/menu/manage/$menu_name/add", $edit, t('Save'));
     // Check the link was added with the correct menu link default language.
@@ -98,7 +93,7 @@ class MenuLanguageTest extends MenuWebTestBase {
     $link_title = $this->randomString();
     $edit = array(
       'title[0][value]' => $link_title,
-      'url' => $link_path,
+      'link[0][uri]' => $link_path,
     );
     $this->drupalPostForm("admin/structure/menu/manage/$menu_name/add", $edit, t('Save'));
     // Check the link was added with the correct new menu link default language.
@@ -137,36 +132,6 @@ class MenuLanguageTest extends MenuWebTestBase {
     // Check that the language selector is not available on menu link add page.
     $this->drupalGet("admin/structure/menu/manage/$menu_name/add");
     $this->assertNoField('edit-langcode-0-value', 'The language selector field was hidden the page');
-  }
-
-  /**
-   * Tests menu configuration is still English after English has been deleted.
-   */
-  function testMenuLanguageRemovedEnglish() {
-    // Create a test menu to test language settings.
-    // Machine name has to be lowercase.
-    $menu_name = Unicode::strtolower($this->randomMachineName(16));
-    $edit = array(
-      'id' => $menu_name,
-      'description' => '',
-      'label' => $this->randomString(),
-      'langcode' => 'en',
-    );
-    $this->drupalPostForm('admin/structure/menu/add', $edit, t('Save'));
-
-    // Check that the language settings were saved.
-    $menu = Menu::load($menu_name);
-    $this->assertEqual($menu->language()->getId(), 'en');
-
-    // Remove English language. To do that another language has to be set as
-    // default.
-    $this->config('system.site')->set('langcode', 'cs')->save();
-    entity_delete_multiple('configurable_language', array('en'));
-
-    // Save the menu again and check if the language is still the same.
-    $this->drupalPostForm("admin/structure/menu/manage/$menu_name", array(), t('Save'));
-    $menu = Menu::load($menu_name);
-    $this->assertEqual($menu->language()->getId(), 'en');
   }
 
 }

@@ -8,7 +8,7 @@
 namespace Drupal\comment\Tests;
 
 use Drupal\comment\Plugin\Field\FieldType\CommentItemInterface;
-use Drupal\content_translation\Tests\ContentTranslationUITest;
+use Drupal\content_translation\Tests\ContentTranslationUITestBase;
 use Drupal\language\Entity\ConfigurableLanguage;
 
 /**
@@ -16,7 +16,9 @@ use Drupal\language\Entity\ConfigurableLanguage;
  *
  * @group comment
  */
-class CommentTranslationUITest extends ContentTranslationUITest {
+class CommentTranslationUITest extends ContentTranslationUITestBase {
+
+  use CommentTestTrait;
 
   /**
    * The subject of the test comment.
@@ -47,31 +49,31 @@ class CommentTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::setupBundle().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::setupBundle().
    */
   function setupBundle() {
     parent::setupBundle();
     $this->drupalCreateContentType(array('type' => $this->nodeBundle, 'name' => $this->nodeBundle));
     // Add a comment field to the article content type.
-    $this->container->get('comment.manager')->addDefaultField('node', 'article', 'comment_article', CommentItemInterface::OPEN, 'comment_article');
+    $this->addDefaultCommentField('node', 'article', 'comment_article', CommentItemInterface::OPEN, 'comment_article');
     // Create a page content type.
     $this->drupalCreateContentType(array('type' => 'page', 'name' => 'page'));
     // Add a comment field to the page content type - this one won't be
     // translatable.
-    $this->container->get('comment.manager')->addDefaultField('node', 'page', 'comment');
+    $this->addDefaultCommentField('node', 'page', 'comment');
     // Mark this bundle as translatable.
     $this->container->get('content_translation.manager')->setEnabled('comment', 'comment_article', TRUE);
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getTranslatorPermission().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getTranslatorPermission().
    */
   protected function getTranslatorPermissions() {
     return array_merge(parent::getTranslatorPermissions(), array('post comments', 'administer comments', 'access comments'));
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::createEntity().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::createEntity().
    */
   protected function createEntity($values, $langcode, $comment_type = 'comment_article') {
     if ($comment_type == 'comment_article') {
@@ -98,7 +100,7 @@ class CommentTranslationUITest extends ContentTranslationUITest {
   }
 
   /**
-   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITest::getNewEntityValues().
+   * Overrides \Drupal\content_translation\Tests\ContentTranslationUITestBase::getNewEntityValues().
    */
   protected function getNewEntityValues($langcode) {
     // Comment subject is not translatable hence we use a fixed value.
@@ -178,6 +180,30 @@ class CommentTranslationUITest extends ContentTranslationUITest {
     $this->assertResponse(200);
     $this->assertLinkByHref('comment/' . $cid_translatable . '/translations');
     $this->assertNoLinkByHref('comment/' . $cid_untranslatable . '/translations');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function doTestTranslationEdit() {
+    $entity = entity_load($this->entityTypeId, $this->entityId, TRUE);
+    $languages = $this->container->get('language_manager')->getLanguages();
+
+    foreach ($this->langcodes as $langcode) {
+      // We only want to test the title for non-english translations.
+      if ($langcode != 'en') {
+        $options = array('language' => $languages[$langcode]);
+        $url = $entity->urlInfo('edit-form', $options);
+        $this->drupalGet($url);
+
+        $title = t('Edit @type @title [%language translation]', array(
+          '@type' => $this->entityTypeId,
+          '@title' => $entity->getTranslation($langcode)->label(),
+          '%language' => $languages[$langcode]->getName(),
+        ));
+        $this->assertRaw($title);
+      }
+    }
   }
 
 }

@@ -8,6 +8,8 @@
 namespace Drupal\tracker\Tests;
 
 use Drupal\comment\CommentInterface;
+use Drupal\comment\Tests\CommentTestTrait;
+use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -17,12 +19,14 @@ use Drupal\simpletest\WebTestBase;
  */
 class TrackerTest extends WebTestBase {
 
+  use CommentTestTrait;
+
   /**
    * Modules to enable.
    *
    * @var array
    */
-  public static $modules = array('comment', 'tracker', 'history');
+  public static $modules = array('comment', 'tracker', 'history', 'node_test');
 
   /**
    * The main user for testing.
@@ -46,7 +50,7 @@ class TrackerTest extends WebTestBase {
     $permissions = array('access comments', 'create page content', 'post comments', 'skip comment approval');
     $this->user = $this->drupalCreateUser($permissions);
     $this->otherUser = $this->drupalCreateUser($permissions);
-    $this->container->get('comment.manager')->addDefaultField('node', 'page');
+    $this->addDefaultCommentField('node', 'page');
   }
 
   /**
@@ -73,6 +77,21 @@ class TrackerTest extends WebTestBase {
     $published->delete();
     $this->drupalGet('activity');
     $this->assertNoText($published->label(), 'Deleted node does not show up in the tracker listing.');
+
+    // Test proper display of time on activity page when comments are disabled.
+    // Disable comments.
+    FieldStorageConfig::loadByName('node', 'comment')->delete();
+    $node = $this->drupalCreateNode([
+      // This title is required to trigger the custom changed time set in the
+      // node_test module. This is needed in order to ensure a sufficiently
+      // large 'time ago' interval that isn't numbered in seconds.
+      'title' => 'testing_node_presave',
+      'status' => 1,
+    ]);
+
+    $this->drupalGet('activity');
+    $this->assertText($node->label(), 'Published node shows up in the tracker listing.');
+    $this->assertText(\Drupal::service('date.formatter')->formatInterval(REQUEST_TIME - $node->getChangedTime()), 'The changed time was displayed on the tracker listing.');
   }
 
   /**
@@ -143,7 +162,8 @@ class TrackerTest extends WebTestBase {
 
     $this->drupalGet('node/' . $node->id());
     // Simulate the JavaScript on the node page to mark the node as read.
-    // @todo Get rid of curlExec() once https://drupal.org/node/2074037 lands.
+    // @todo Get rid of curlExec() once https://www.drupal.org/node/2074037
+    //   lands.
     $this->curlExec(array(
       CURLOPT_URL => \Drupal::url('history.read_node', ['node' => $node->id()], array('absolute' => TRUE)),
       CURLOPT_HTTPHEADER => array(
@@ -159,7 +179,8 @@ class TrackerTest extends WebTestBase {
 
     $this->drupalGet('node/' . $node->id());
     // Simulate the JavaScript on the node page to mark the node as read.
-    // @todo Get rid of curlExec() once https://drupal.org/node/2074037 lands.
+    // @todo Get rid of curlExec() once https://www.drupal.org/node/2074037
+    //   lands.
     $this->curlExec(array(
       CURLOPT_URL => \Drupal::url('history.read_node', ['node' => $node->id()], array('absolute' => TRUE)),
       CURLOPT_HTTPHEADER => array(
@@ -188,7 +209,8 @@ class TrackerTest extends WebTestBase {
     $this->drupalPostForm('comment/reply/node/' . $node->id() . '/comment', $comment, t('Save'));
     // The new comment is automatically viewed by the current user. Simulate the
     // JavaScript that does this.
-    // @todo Get rid of curlExec() once https://drupal.org/node/2074037 lands.
+    // @todo Get rid of curlExec() once https://www.drupal.org/node/2074037
+    //   lands.
     $this->curlExec(array(
       CURLOPT_URL => \Drupal::url('history.read_node', ['node' => $node->id()], array('absolute' => TRUE)),
       CURLOPT_HTTPHEADER => array(
@@ -344,6 +366,7 @@ class TrackerTest extends WebTestBase {
    */
   function testTrackerAdminUnpublish() {
     \Drupal::service('module_installer')->install(array('views'));
+    \Drupal::service('router.builder')->rebuild();
     $admin_user = $this->drupalCreateUser(array('access content overview', 'administer nodes', 'bypass node access'));
     $this->drupalLogin($admin_user);
 

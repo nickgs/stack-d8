@@ -7,9 +7,9 @@
 
 namespace Drupal\Core\Config\Entity;
 
-use Drupal\Component\Plugin\ConfigurablePluginInterface;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Cache\Cache;
+use Drupal\Core\Config\ConfigException;
 use Drupal\Core\Config\Schema\SchemaIncompleteException;
 use Drupal\Core\Entity\Entity;
 use Drupal\Core\Config\ConfigDuplicateUUIDException;
@@ -83,9 +83,34 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
   /**
    * The language code of the entity's default language.
    *
+   * Assumed to be English by default. ConfigEntityStorage will set an
+   * appropriate language when creating new entities. This default applies to
+   * imported default configuration where the language code is missing. Those
+   * should be assumed to be English. All configuration entities support third
+   * party settings, so even configuration entities that do not directly
+   * store settings involving text in a human language may have such third
+   * party settings attached. This means configuration entities should be in one
+   * of the configured languages or the built-in English.
+   *
    * @var string
    */
-  protected $langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED;
+  protected $langcode = 'en';
+
+  /**
+   * Third party entity settings.
+   *
+   * An array of key/value pairs keyed by provider.
+   *
+   * @var array
+   */
+  protected $third_party_settings = array();
+
+  /**
+   * Trust supplied data and not use configuration schema on save.
+   *
+   * @var bool
+   */
+  protected $trustedData = FALSE;
 
   /**
    * Overrides Entity::__construct().
@@ -112,9 +137,13 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
    * {@inheritdoc}
    */
   public function setOriginalId($id) {
+    // Do not call the parent method since that would mark this entity as no
+    // longer new. Unlike content entities, new configuration entities have an
+    // ID.
+    // @todo https://www.drupal.org/node/2478811 Document the entity life cycle
+    //   and the differences between config and content.
     $this->originalId = $id;
-
-    return parent::setOriginalId($id);
+    return $this;
   }
 
   /**
@@ -243,21 +272,33 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
    */
   public function toArray() {
     $properties = array();
-    $config_name = $this->getEntityType()->getConfigPrefix() . '.' . $this->id();
-    $definition = $this->getTypedConfig()->getDefinition($config_name);
-    if (!isset($definition['mapping'])) {
-      throw new SchemaIncompleteException(String::format('Incomplete or missing schema for @config_name', array('@config_name' => $config_name)));
+    /** @var \Drupal\Core\Config\Entity\ConfigEntityTypeInterface $entity_type */
+    $entity_type = $this->getEntityType();
+
+    $properties_to_export = $entity_type->getPropertiesToExport();
+    if (empty($properties_to_export)) {
+      $config_name = $entity_type->getConfigPrefix() . '.' . $this->id();
+      $definition = $this->getTypedConfig()->getDefinition($config_name);
+      if (!isset($definition['mapping'])) {
+        throw new SchemaIncompleteException(SafeMarkup::format('Incomplete or missing schema for @config_name', array('@config_name' => $config_name)));
+      }
+      $properties_to_export = array_combine(array_keys($definition['mapping']), array_keys($definition['mapping']));
     }
-    $id_key = $this->getEntityType()->getKey('id');
-    foreach (array_keys($definition['mapping']) as $name) {
+
+    $id_key = $entity_type->getKey('id');
+    foreach ($properties_to_export as $property_name => $export_name) {
       // Special handling for IDs so that computed compound IDs work.
       // @see \Drupal\Core\Entity\EntityDisplayBase::id()
-      if ($name == $id_key) {
-        $properties[$name] = $this->id();
+      if ($property_name == $id_key) {
+        $properties[$export_name] = $this->id();
       }
       else {
-        $properties[$name] = $this->get($name);
+        $properties[$export_name] = $this->get($property_name);
       }
+    }
+
+    if (empty($this->third_party_settings)) {
+      unset($properties['third_party_settings']);
     }
     return $properties;
   }
@@ -292,7 +333,7 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
       ->execute();
     $matched_entity = reset($matching_entities);
     if (!empty($matched_entity) && ($matched_entity != $this->id()) && $matched_entity != $this->getOriginalId()) {
-      throw new ConfigDuplicateUUIDException(String::format('Attempt to save a configuration entity %id with UUID %uuid when this UUID is already used for %matched', array('%id' => $this->id(), '%uuid' => $this->uuid(), '%matched' => $matched_entity)));
+      throw new ConfigDuplicateUUIDException(SafeMarkup::format('Attempt to save a configuration entity %id with UUID %uuid when this UUID is already used for %matched', array('%id' => $this->id(), '%uuid' => $this->uuid(), '%matched' => $matched_entity)));
     }
 
     // If this entity is not new, load the original entity for comparison.
@@ -300,10 +341,10 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
       $original = $storage->loadUnchanged($this->getOriginalId());
       // Ensure that the UUID cannot be changed for an existing entity.
       if ($original && ($original->uuid() != $this->uuid())) {
-        throw new ConfigDuplicateUUIDException(String::format('Attempt to save a configuration entity %id with UUID %uuid when this entity already exists with UUID %original_uuid', array('%id' => $this->id(), '%uuid' => $this->uuid(), '%original_uuid' => $original->uuid())));
+        throw new ConfigDuplicateUUIDException(SafeMarkup::format('Attempt to save a configuration entity %id with UUID %uuid when this entity already exists with UUID %original_uuid', array('%id' => $this->id(), '%uuid' => $this->uuid(), '%original_uuid' => $original->uuid())));
       }
     }
-    if (!$this->isSyncing()) {
+    if (!$this->isSyncing() && !$this->trustedData) {
       // Ensure the correct dependencies are present. If the configuration is
       // being written during a configuration synchronization then there is no
       // need to recalculate the dependencies.
@@ -418,7 +459,25 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
   /**
    * {@inheritdoc}
    */
+  public function getConfigTarget() {
+    // For configuration entities, use the config ID for the config target
+    // identifier. This ensures that default configuration (which does not yet
+    // have UUIDs) can be provided and installed with references to the target,
+    // and also makes config dependencies more readable.
+    return $this->id();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function onDependencyRemoval(array $dependencies) {
+    $changed = FALSE;
+    if (!empty($this->third_party_settings)) {
+      $old_count = count($this->third_party_settings);
+      $this->third_party_settings = array_diff_key($this->third_party_settings, array_flip($dependencies['module']));
+      $changed = $old_count != count($this->third_party_settings);
+    }
+    return $changed;
   }
 
   /**
@@ -439,6 +498,118 @@ abstract class ConfigEntityBase extends Entity implements ConfigEntityInterface 
    */
   protected static function invalidateTagsOnDelete(EntityTypeInterface $entity_type, array $entities) {
     Cache::invalidateTags($entity_type->getListCacheTags());
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setThirdPartySetting($module, $key, $value) {
+    $this->third_party_settings[$module][$key] = $value;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySetting($module, $key, $default = NULL) {
+    if (isset($this->third_party_settings[$module][$key])) {
+      return $this->third_party_settings[$module][$key];
+    }
+    else {
+      return $default;
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartySettings($module) {
+    return isset($this->third_party_settings[$module]) ? $this->third_party_settings[$module] : array();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function unsetThirdPartySetting($module, $key) {
+    unset($this->third_party_settings[$module][$key]);
+    // If the third party is no longer storing any information, completely
+    // remove the array holding the settings for this module.
+    if (empty($this->third_party_settings[$module])) {
+      unset($this->third_party_settings[$module]);
+    }
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getThirdPartyProviders() {
+    return array_keys($this->third_party_settings);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function preDelete(EntityStorageInterface $storage, array $entities) {
+    parent::preDelete($storage, $entities);
+
+    foreach ($entities as $entity) {
+      if ($entity->isUninstalling() || $entity->isSyncing()) {
+        // During extension uninstall and configuration synchronization
+        // deletions are already managed.
+        break;
+      }
+      // Fix or remove any dependencies.
+      $config_entities = static::getConfigManager()->getConfigEntitiesToChangeOnDependencyRemoval('config', [$entity->getConfigDependencyName()], FALSE);
+      /** @var \Drupal\Core\Config\Entity\ConfigEntityInterface $dependent_entity */
+      foreach ($config_entities['update'] as $dependent_entity) {
+        $dependent_entity->save();
+      }
+      foreach ($config_entities['delete'] as $dependent_entity) {
+        $dependent_entity->delete();
+      }
+    }
+  }
+
+  /**
+   * Gets the configuration manager.
+   *
+   * @return \Drupal\Core\Config\ConfigManager
+   *   The configuration manager.
+   */
+  protected static function getConfigManager() {
+    return \Drupal::service('config.manager');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function isInstallable() {
+    return TRUE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function trustData() {
+    $this->trustedData = TRUE;
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function hasTrustedData() {
+    return $this->trustedData;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function save() {
+    $return = parent::save();
+    $this->trustedData = FALSE;
+    return $return;
   }
 
 }

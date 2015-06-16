@@ -8,6 +8,7 @@
 namespace Drupal\system\Tests\Entity;
 
 use Drupal\Core\Database\DatabaseExceptionWrapper;
+use Drupal\Core\Database\IntegrityConstraintViolationException;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\Core\Entity\EntityTypeEvents;
 use Drupal\Core\Entity\Exception\FieldStorageDefinitionUpdateForbiddenException;
@@ -52,6 +53,26 @@ class EntityDefinitionUpdateTest extends EntityUnitTestBase {
     foreach (array_diff_key($this->entityManager->getDefinitions(), array_flip(array('user', 'entity_test'))) as $entity_type_id => $entity_type) {
       $this->installEntitySchema($entity_type_id);
     }
+  }
+
+  /**
+   * Tests that new entity type definitions are correctly handled.
+   */
+  public function testNewEntityType() {
+    $entity_type_id = 'entity_test_new';
+    $schema = $this->database->schema();
+
+    // Check that the "entity_test_new" is not defined.
+    $entity_types = $this->entityManager->getDefinitions();
+    $this->assertFalse(isset($entity_types[$entity_type_id]), 'The "entity_test_new" entity type does not exist.');
+    $this->assertFalse($schema->tableExists($entity_type_id), 'Schema for the "entity_test_new" entity type does not exist.');
+
+    // Check that the "entity_test_new" is now defined and the related schema
+    // has been created.
+    $this->enableNewEntityType();
+    $entity_types = $this->entityManager->getDefinitions();
+    $this->assertTrue(isset($entity_types[$entity_type_id]), 'The "entity_test_new" entity type exists.');
+    $this->assertTrue($schema->tableExists($entity_type_id), 'Schema for the "entity_test_new" entity type has been created.');
   }
 
   /**
@@ -339,14 +360,19 @@ class EntityDefinitionUpdateTest extends EntityUnitTestBase {
         ->execute();
       $this->fail($message);
     }
-    catch (DatabaseExceptionWrapper $e) {
-      // Now provide a value for the 'not null' column. This is expected to
-      // succeed.
-      $values['new_bundle_field_shape'] = $this->randomString();
-      $this->database->insert('entity_test_update__new_bundle_field')
-        ->fields($values)
-        ->execute();
-      $this->pass($message);
+    catch (\RuntimeException $e) {
+      if ($e instanceof DatabaseExceptionWrapper || $e instanceof IntegrityConstraintViolationException) {
+        // Now provide a value for the 'not null' column. This is expected to
+        // succeed.
+        $values['new_bundle_field_shape'] = $this->randomString();
+        $this->database->insert('entity_test_update__new_bundle_field')
+          ->fields($values)
+          ->execute();
+        $this->pass($message);
+      } else {
+        // Keep throwing it.
+        throw $e;
+      }
     }
   }
 
@@ -492,19 +518,11 @@ class EntityDefinitionUpdateTest extends EntityUnitTestBase {
     $entity = $this->entityManager->getStorage('entity_test_update')->create(array('name' => $name));
     $entity->save();
 
-    // Add an entity index, run the update. For now, it's expected to throw an
-    // exception.
-    // @todo Improve SqlContentEntityStorageSchema::requiresEntityDataMigration()
-    //   to return FALSE when only index changes are required, so that it can be
-    //   applied on top of existing data: https://www.drupal.org/node/2340993.
+    // Add an entity index, run the update. Ensure that the index is created
+    // despite having data.
     $this->addEntityIndex();
-    try {
-      $this->entityDefinitionUpdateManager->applyUpdates();
-      $this->fail('EntityStorageException thrown when trying to apply an update that requires data migration.');
-    }
-    catch (EntityStorageException $e) {
-      $this->pass('EntityStorageException thrown when trying to apply an update that requires data migration.');
-    }
+    $this->entityDefinitionUpdateManager->applyUpdates();
+    $this->assertTrue($this->database->schema()->indexExists('entity_test_update', 'entity_test_update__new_index'), 'Index added.');
   }
 
   /**
@@ -541,20 +559,47 @@ class EntityDefinitionUpdateTest extends EntityUnitTestBase {
   }
 
   /**
-   * Tests updating entity schema and creating a base field at the same time when there are no existing entities.
+   * Tests updating entity schema and creating a base field.
+   *
+   * This tests updating entity schema and creating a base field at the same
+   * time when there are no existing entities.
    */
   public function testEntityTypeSchemaUpdateAndBaseFieldCreateWithoutData() {
     $this->updateEntityTypeToRevisionable();
     $this->addBaseField();
+    $message = 'Successfully updated entity schema and created base field at the same time.';
     // Entity type updates create base fields as well, thus make sure doing both
     // at the same time does not lead to errors due to the base field being
     // created twice.
     try {
       $this->entityDefinitionUpdateManager->applyUpdates();
-      $this->pass('Successfully updated entity schema and created base field at the same time.');
+      $this->pass($message);
     }
     catch (\Exception $e) {
-      $this->fail('Successfully updated entity schema and created base field at the same time.');
+      $this->fail($message);
+      throw $e;
+    }
+  }
+
+  /**
+   * Tests updating entity schema and creating a revisionable base field.
+   *
+   * This tests updating entity schema and creating a revisionable base field
+   * at the same time when there are no existing entities.
+   */
+  public function testEntityTypeSchemaUpdateAndRevisionableBaseFieldCreateWithoutData() {
+    $this->updateEntityTypeToRevisionable();
+    $this->addRevisionableBaseField();
+    $message = 'Successfully updated entity schema and created revisionable base field at the same time.';
+    // Entity type updates create base fields as well, thus make sure doing both
+    // at the same time does not lead to errors due to the base field being
+    // created twice.
+    try {
+      $this->entityDefinitionUpdateManager->applyUpdates();
+      $this->pass($message);
+    }
+    catch (\Exception $e) {
+      $this->fail($message);
       throw $e;
     }
   }

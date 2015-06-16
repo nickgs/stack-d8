@@ -11,7 +11,7 @@
  *
  * This site is an API reference for Drupal, generated from comments embedded
  * in the source code. More in-depth documentation can be found at
- * https://drupal.org/developing/api.
+ * https://www.drupal.org/developing/api.
  *
  * Here are some topics to help you get started developing with Drupal.
  *
@@ -62,9 +62,9 @@
  * @section more_info Further information
  *
  * - @link https://api.drupal.org/api/drupal/groups/8 All topics @endlink
- * - @link https://drupal.org/project/examples Examples project (sample modules) @endlink
- * - @link https://drupal.org/list-changes API change notices @endlink
- * - @link https://drupal.org/developing/api/8 Drupal 8 API longer references @endlink
+ * - @link https://www.drupal.org/project/examples Examples project (sample modules) @endlink
+ * - @link https://www.drupal.org/list-changes API change notices @endlink
+ * - @link https://www.drupal.org/developing/api/8 Drupal 8 API longer references @endlink
  */
 
 /**
@@ -190,7 +190,7 @@
  * $state->set('system.cron_last', REQUEST_TIME);
  * @endcode
  *
- * For more on the State API, see https://drupal.org/developing/api/8/state
+ * For more on the State API, see https://www.drupal.org/developing/api/8/state
  * @}
  */
 
@@ -203,7 +203,7 @@
  * information. See the @link info_types Information types topic @endlink for
  * an overview of the different types of information. The sections below have
  * more information about the configuration API; see
- * https://drupal.org/developing/api/8/configuration for more details.
+ * https://www.drupal.org/developing/api/8/configuration for more details.
  *
  * @section sec_storage Configuration storage
  * In Drupal, there is a concept of the "active" configuration, which is the
@@ -236,21 +236,27 @@
  *   to uninstall/reinstall or use a hook_update_N() function.
  * - Exporting and importing configuration.
  *
- * The file storage format for configuration information in Drupal is @link
- * http://en.wikipedia.org/wiki/YAML YAML files. @endlink Configuration is
+ * The file storage format for configuration information in Drupal is
+ * @link http://en.wikipedia.org/wiki/YAML YAML files. @endlink Configuration is
  * divided into files, each containing one configuration object. The file name
  * for a configuration object is equal to the unique name of the configuration,
  * with a '.yml' extension. The default configuration files for each module are
  * placed in the config/install directory under the top-level module directory,
  * so look there in most Core modules for examples.
  *
+ * @section sec_schema Configuration schema and translation
  * Each configuration file has a specific structure, which is expressed as a
  * YAML-based configuration schema. The configuration schema details the
  * structure of the configuration, its data types, and which of its values need
  * to be translatable. Each module needs to define its configuration schema in
  * files in the config/schema directory under the top-level module directory, so
- * look there in most Core modules for examples. Note that data types label,
- * text, and data_format are translatable; string is non-translatable text.
+ * look there in most Core modules for examples.
+ *
+ * Configuration can be internationalized; see the
+ * @link i18n Internationalization topic @endlink for more information. Data
+ * types label, text, and date_format in configuration schema are translatable;
+ * string is non-translatable text (the 'translatable' property on a schema
+ * data type definition indicates that it is translatable).
  *
  * @section sec_simple Simple configuration
  * The simple configuration API should be used for information that will always
@@ -295,7 +301,7 @@
  * section, if your module allows users to create zero or more items (where
  * "items" are things like content type definitions, view definitions, and the
  * like), then you need to define a configuration entity type to store your
- * configuration. Creating an entity type, loading entites, and querying them
+ * configuration. Creating an entity type, loading entities, and querying them
  * are outlined in the @link entity_api Entity API topic. @endlink Here are a
  * few additional steps and notes specific to configuration entities:
  * - For examples, look for classes that implement
@@ -378,7 +384,7 @@
  * - Define a Cache ID (cid) value for your data. A cid is a string, which must
  *   contain enough information to uniquely identify the data. For example, if
  *   your data contains translated strings, then your cid value must include the
- *   current interface language.
+ *   interface text language selected for page.
  * - Call the get() method to attempt a cache read, to see if the cache already
  *   contains your data.
  * - If your data is not already in the cache, compute it and add it to the
@@ -466,19 +472,18 @@
  *
  * @section tags Cache Tags
  *
- * The fourth argument of the @code set() @endcode method can be used to specify
- * cache tags, which are used to identify which data is included in each cache
- * item. A cache item can have multiple cache tags (an array of cache tags), and
- * each cache tag is a string. The convention is to generate cache tags of the
- * form @code <prefix>:<suffix> @endcode. Usually, you'll want to associate the
- * cache tags of entities, or entity listings. You won't have to manually
- * construct cache tags for them — just get their cache tags via
+ * The fourth argument of the set() method can be used to specify cache tags,
+ * which are used to identify which data is included in each cache item. A cache
+ * item can have multiple cache tags (an array of cache tags), and each cache
+ * tag is a string. The convention is to generate cache tags of the form
+ * [prefix]:[suffix]. Usually, you'll want to associate the cache tags of
+ * entities, or entity listings. You won't have to manually construct cache tags
+ * for them — just get their cache tags via
  * \Drupal\Core\Entity\EntityInterface::getCacheTags() and
  * \Drupal\Core\Entity\EntityTypeInterface::getListCacheTags().
- * Data that has been tagged can be invalidated as a group: no matter
- * the Cache ID (cid) of the cache item, no matter in which cache bin a cache
- * item lives; as long as it is tagged with a certain cache tag, it will be
- * invalidated.
+ * Data that has been tagged can be invalidated as a group: no matter the Cache
+ * ID (cid) of the cache item, no matter in which cache bin a cache item lives;
+ * as long as it is tagged with a certain cache tag, it will be invalidated.
  *
  * Because of that, cache tags are a solution to the cache invalidation problem:
  * - For caching to be effective, each cache item must only be invalidated when
@@ -540,7 +545,7 @@
  *  $settings['cache']['default'] = 'cache.custom';
  * @endcode
  *
- * @see https://drupal.org/node/1884796
+ * @see https://www.drupal.org/node/1884796
  * @}
  */
 
@@ -655,7 +660,7 @@
  * provider class directly, so that they get the correct class (default or
  * overridden).
  *
- * See https://drupal.org/node/2133171 for more detailed information on
+ * See https://www.drupal.org/node/2133171 for more detailed information on
  * services and the dependency injection container.
  *
  * @section sec_discover Discovering existing services
@@ -695,13 +700,13 @@
  * names of the dependencies (preceded by '@'); objects for each of these
  * services are instantiated from the container and passed to the class
  * constructor when the service class is instantiated. Other arguments can also
- * be passed in; see the section at https://drupal.org/node/2133171 for more
+ * be passed in; see the section at https://www.drupal.org/node/2133171 for more
  * detailed information.
  *
  * Services using factories can be defined as shown in the above example, if the
  * factory is itself a service. The factory can also be a class; details of how
  * to use service factories can be found in the section at
- * https://drupal.org/node/2133171.
+ * https://www.drupal.org/node/2133171.
  *
  * @section sec_container Accessing a service through the container
  * As noted above, if you need to use a service in your code, you should always
@@ -716,10 +721,9 @@
  *   arguments, but they all include an argument $container of type
  *   \Symfony\Component\DependencyInjection\ContainerInterface.
  *   If you are defining one of these classes, in the create() or
- *   createInstance() method, call
- *   @code $container->get('myservice.name') @endcode to instantiate a service.
- *   The results of these calls are generally passed to the class constructor
- *   and saved as member variables in the class.
+ *   createInstance() method, call $container->get('myservice.name') to
+ *   instantiate a service. The results of these calls are generally passed to
+ *   the class constructor and saved as member variables in the class.
  * - For functions and class methods that do not have access to either of
  *   the above methods of dependency injection, you can use service location to
  *   access services, via a call to the global \Drupal class. This class has
@@ -790,7 +794,7 @@
  *   Note that $container here is an instance of
  *   \Drupal\Core\DependencyInjection\ContainerBuilder.
  *
- * @see https://drupal.org/node/2133171
+ * @see https://www.drupal.org/node/2133171
  * @see core.services.yml
  * @see \Drupal
  * @see \Symfony\Component\DependencyInjection\ContainerInterface
@@ -810,7 +814,7 @@
  * translatable, and who can access it). The Typed Data API is used in several
  * Drupal sub-systems, such as the Entity Field API and Configuration API.
  *
- * See https://drupal.org/node/1794140 for more information about the Typed
+ * See https://www.drupal.org/node/1794140 for more information about the Typed
  * Data API.
  *
  * @section interfaces Interfaces and classes in the Typed Data API
@@ -895,13 +899,13 @@
  *   where yourmodule is your module's machine name.
  * - The test class file must be named and placed under the yourmodule/tests/src
  *   directory, according to the PSR-4 standard.
- * - Your test class needs a getInfo() method, which gives information about
- *   the test.
+ * - Your test class needs a phpDoc comment block with a description and
+ *   a @group annotation, which gives information about the test.
  * - Methods in your test class whose names start with 'test' are the actual
  *   test cases. Each one should test a logical subset of the functionality.
  * For more details, see:
- * - https://drupal.org/phpunit for full documentation on how to write PHPUnit
- *   tests for Drupal.
+ * - https://www.drupal.org/phpunit for full documentation on how to write
+ *   PHPUnit tests for Drupal.
  * - http://phpunit.de for general information on the PHPUnit framework.
  * - @link oo_conventions Object-oriented programming topic @endlink for more
  *   on PSR-4, namespaces, and where to place classes.
@@ -928,8 +932,8 @@
  *   where yourmodule is your module's machine name.
  * - The test class file must be named and placed under the yourmodule/src/Tests
  *   directory, according to the PSR-4 standard.
- * - Your test class needs a getInfo() method, which gives information about
- *   the test.
+ * - Your test class needs a phpDoc comment block with a description and
+ *   a @group annotation, which gives information about the test.
  * - You may also override the default setUp() method, which can set be used to
  *   set up content types and similar procedures.
  * - In some cases, you may need to write a test module to support your test;
@@ -940,7 +944,7 @@
  *   environment, so it can only rely on the setUp() method, not what has
  *   been set up by other test methods.
  * For more details, see:
- * - https://drupal.org/simpletest for full documentation on how to write
+ * - https://www.drupal.org/simpletest for full documentation on how to write
  *   functional tests for Drupal.
  * - @link oo_conventions Object-oriented programming topic @endlink for more
  *   on PSR-4, namespaces, and where to place classes.
@@ -948,12 +952,12 @@
  * @section running Running tests
  * You can run both Simpletest and PHPUnit tests by enabling the core Testing
  * module (core/modules/simpletest). Once that module is enabled, tests can be
- * run usin the core/scripts/run-tests.sh script, using
- * @link https://drupal.org/project/drush Drush @endlink, or from the Testing
- * module user interface.
+ * run using the core/scripts/run-tests.sh script, using
+ * @link https://www.drupal.org/project/drush Drush @endlink, or from the
+ *   Testing module user interface.
  *
  * PHPUnit tests can also be run from the command line, using the PHPUnit
- * framework. See https://drupal.org/node/2116263 for more information.
+ * framework. See https://www.drupal.org/node/2116263 for more information.
  * @}
  */
 
@@ -1002,10 +1006,10 @@
  *   site; CSS files, which alter the styling applied to the HTML; and
  *   JavaScript, Flash, images, and other files. For more information, see the
  *   @link theme_render Theme system and render API topic @endlink and
- *   https://drupal.org/theme-guide/8
+ *   https://www.drupal.org/theme-guide/8
  * - Modules: Modules add to or alter the behavior and functionality of Drupal,
  *   by using one or more of the methods listed below. For more information
- *   about creating modules, see https://drupal.org/developing/modules/8
+ *   about creating modules, see https://www.drupal.org/developing/modules/8
  * - Installation profiles: Installation profiles can be used to
  *   create distributions, which are complete specific-purpose packages of
  *   Drupal including additional modules, themes, and data. For more
@@ -1083,7 +1087,7 @@
  * - Create a plugin of an existing plugin type: see @ref sec_create below.
  * - Perform tasks that involve plugins: see @ref sec_use below.
  *
- * See https://drupal.org/developing/api/8/plugins for more detailed
+ * See https://www.drupal.org/developing/api/8/plugins for more detailed
  * documentation on the plugin system. There are also topics for a few
  * of the many existing types of plugins:
  * - @link block_api Block API @endlink
@@ -1128,7 +1132,7 @@
  *   subdirectory. Most Drupal Core plugins use this method of discovery.
  * - Hook: Plugin modules need to implement a hook to tell the manager about
  *   their plugins.
- * - YAML: Plugins are listd in YAML files. Drupal Core uses this method for
+ * - YAML: Plugins are listed in YAML files. Drupal Core uses this method for
  *   discovering local tasks and local actions. This is mainly useful if all
  *   plugins use the same class, so it is kind of like a global derivative.
  * - Static: Plugin classes are registered within the plugin manager class
@@ -1138,7 +1142,7 @@
  * It is also possible to define your own custom discovery mechanism or mix
  * methods together. And there are many more details, such as annotation
  * decorators, that apply to some of the discovery methods. See
- * https://drupal.org/developing/api/8/plugins for more details.
+ * https://www.drupal.org/developing/api/8/plugins for more details.
  *
  * The remainder of this documentation will assume Annotation-based discovery,
  * since this is the most common method.
@@ -1262,7 +1266,7 @@
  *   for most plugin classes. See the
  *   @link plugin_api Plugin API topic @endlink for more information.
  * - There are project-wide coding standards for OO code, including naming:
- *   https://drupal.org/node/608152
+ *   https://www.drupal.org/node/608152
  * - Documentation standards for classes are covered on:
  *   https://www.drupal.org/coding-standards/docs#classes
  * @}
@@ -1278,16 +1282,16 @@
  * and efficient. In order to facilitate this, the Drupal community has
  * developed a set of guidelines and standards for developers to follow. Most of
  * these standards can be found under
- * @link https://drupal.org/developing/best-practices Best practices on Drupal.org @endlink
+ * @link https://www.drupal.org/developing/best-practices Best practices on Drupal.org @endlink
  *
  * Standards and best practices that developers should be aware of include:
- * - Security: https://drupal.org/writing-secure-code and the
+ * - Security: https://www.drupal.org/writing-secure-code and the
  *   @link sanitization Sanitization functions topic @endlink
- * - Coding standards: https://drupal.org/coding-standards
- *   and https://drupal.org/coding-standards/docs
- * - Accessibility: https://drupal.org/node/1637990 (modules) and
- *   https://drupal.org/node/464472 (themes)
- * - Usability: https://drupal.org/ui-standards
+ * - Coding standards: https://www.drupal.org/coding-standards
+ *   and https://www.drupal.org/coding-standards/docs
+ * - Accessibility: https://www.drupal.org/node/1637990 (modules) and
+ *   https://www.drupal.org/node/464472 (themes)
+ * - Usability: https://www.drupal.org/ui-standards
  * - Internationalization: @link i18n Internationalization topic @endlink
  * - Automated testing: @link testing Automated tests topic @endlink
  * @}
@@ -1340,7 +1344,7 @@
  * - Copy the function to your module's .module file.
  * - Change the name of the function, substituting your module's short name
  *   (name of the module's directory, and .info.yml file without the extension)
- *   for the "hook" part of the sample function name. For instance, to implemnt
+ *   for the "hook" part of the sample function name. For instance, to implement
  *   hook_batch_alter(), you would rename it to my_module_batch_alter().
  * - Edit the documentation for the function (normally, your implementation
  *   should just have one line saying "Implements hook_batch_alter().").
@@ -1483,8 +1487,8 @@
  *
  * Alternatively, forms can be built directly via the routing system which will
  * take care of calling \Drupal::formBuilder()->getForm(). The following example
- * demonstrates the use of a routing.yml file to display a form at the the
- * given route.
+ * demonstrates the use of a routing.yml file to display a form at the given
+ * route.
  *
  * @code
  * example.form:
@@ -1500,7 +1504,7 @@
  * workflow, see the
  * @link forms_api_reference.html Form API reference @endlink
  * and the
- * @link https://drupal.org/node/2117411 Form API documentation section. @endlink
+ * @link https://www.drupal.org/node/2117411 Form API documentation section. @endlink
  * In addition, there is a set of Form API tutorials in
  * @link form_example_tutorial.inc the Form Example Tutorial @endlink which
  * provide basics all the way up through multistep forms.
@@ -1862,6 +1866,112 @@ function hook_display_variant_plugin_alter(array &$definitions) {
 }
 
 /**
+ * Flush all persistent and static caches.
+ *
+ * This hook asks your module to clear all of its static caches,
+ * in order to ensure a clean environment for subsequently
+ * invoked data rebuilds.
+ *
+ * Do NOT use this hook for rebuilding information. Only use it to flush custom
+ * caches.
+ *
+ * Static caches using drupal_static() do not need to be reset manually.
+ * However, all other static variables that do not use drupal_static() must be
+ * manually reset.
+ *
+ * This hook is invoked by drupal_flush_all_caches(). It runs before module data
+ * is updated and before hook_rebuild().
+ *
+ * @see drupal_flush_all_caches()
+ * @see hook_rebuild()
+ */
+function hook_cache_flush() {
+  if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE == 'update') {
+    _update_cache_clear();
+  }
+}
+
+/**
+ * Rebuild data based upon refreshed caches.
+ *
+ * This hook allows your module to rebuild its data based on the latest/current
+ * module data. It runs after hook_cache_flush() and after all module data has
+ * been updated.
+ *
+ * This hook is only invoked after the system has been completely cleared;
+ * i.e., all previously cached data is known to be gone and every API in the
+ * system is known to return current information, so your module can safely rely
+ * on all available data to rebuild its own.
+ *
+ * @see hook_cache_flush()
+ * @see drupal_flush_all_caches()
+ */
+function hook_rebuild() {
+  $themes = \Drupal::service('theme_handler')->listInfo();
+  foreach ($themes as $theme) {
+    _block_rehash($theme->getName());
+  }
+}
+
+/**
+ * Alter the configuration synchronization steps.
+ *
+ * @param array $sync_steps
+ *   A one-dimensional array of \Drupal\Core\Config\ConfigImporter method names
+ *   or callables that are invoked to complete the import, in the order that
+ *   they will be processed. Each callable item defined in $sync_steps should
+ *   either be a global function or a public static method. The callable should
+ *   accept a $context array by reference. For example:
+ *   <code>
+ *     function _additional_configuration_step(&$context) {
+ *       // Do stuff.
+ *       // If finished set $context['finished'] = 1.
+ *     }
+ *   </code>
+ *   For more information on creating batches, see the
+ *   @link batch Batch operations @endlink documentation.
+ *
+ * @see callback_batch_operation()
+ * @see \Drupal\Core\Config\ConfigImporter::initialize()
+ */
+function hook_config_import_steps_alter(&$sync_steps, \Drupal\Core\Config\ConfigImporter $config_importer) {
+  $deletes = $config_importer->getUnprocessedConfiguration('delete');
+  if (isset($deletes['field.storage.node.body'])) {
+    $sync_steps[] = '_additional_configuration_step';
+  }
+}
+
+/**
+ * Alter config typed data definitions.
+ *
+ * For example you can alter the typed data types representing each
+ * configuration schema type to change default labels or form element renderers
+ * used for configuration translation.
+ *
+ * If implementations of this hook add or remove configuration schema a
+ * ConfigSchemaAlterException will be thrown. Keep in mind that there are tools
+ * that may use the configuration schema for static analysis of configuration
+ * files, like the string extractor for the localization system. Such systems
+ * won't work with dynamically defined configuration schemas.
+ *
+ * For adding new data types use configuration schema YAML files instead.
+ *
+ * @param $definitions
+ *   Associative array of configuration type definitions keyed by schema type
+ *   names. The elements are themselves array with information about the type.
+ *
+ * @see \Drupal\Core\Config\TypedConfigManager
+ * @see \Drupal\Core\Config\Schema\ConfigSchemaAlterException
+ */
+function hook_config_schema_info_alter(&$definitions) {
+  // Enhance the text and date type definitions with classes to generate proper
+  // form elements in ConfigTranslationFormBase. Other translatable types will
+  // appear as a one line textfield.
+  $definitions['text']['form_element_class'] = '\Drupal\config_translation\FormElement\Textarea';
+  $definitions['date_format']['form_element_class'] = '\Drupal\config_translation\FormElement\DateFormat';
+}
+
+/**
  * @} End of "addtogroup hooks".
  */
 
@@ -1991,7 +2101,7 @@ function hook_display_variant_plugin_alter(array &$definitions) {
  * 'wrapper' method and return HTML markup. This is not the case if you return
  * commands, but if you would like to show status messages, you can add
  * @code
- * array('#theme' => 'status_messages')
+ * array('#type' => 'status_messages')
  * @endcode
  * to a render array, use drupal_render() to render it, and add a command to
  * place the messages in an appropriate location.
@@ -2042,7 +2152,8 @@ function hook_display_variant_plugin_alter(array &$definitions) {
  *   for more information.
  * - needs_destruction: Indicates that a destruct() method needs to be called
  *   at the end of a request to finalize operations, if this service was
- *   instantiated.
+ *   instantiated. Services should implement \Drupal\Core\DestructableInterface
+ *   in this case.
  *
  * Creating a tag for a service does not do anything on its own, but tags
  * can be discovered or queried in a compiler pass when the container is built,

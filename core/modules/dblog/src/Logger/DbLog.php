@@ -7,7 +7,10 @@
 
 namespace Drupal\dblog\Logger;
 
+use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Database\Connection;
+use Drupal\Component\Utility\SafeMarkup;
+use Drupal\Core\DependencyInjection\DependencySerializationTrait;
 use Drupal\Core\Logger\LogMessageParserInterface;
 use Drupal\Core\Logger\RfcLoggerTrait;
 use Psr\Log\LoggerInterface;
@@ -17,6 +20,7 @@ use Psr\Log\LoggerInterface;
  */
 class DbLog implements LoggerInterface {
   use RfcLoggerTrait;
+  use DependencySerializationTrait;
 
   /**
    * The database connection object.
@@ -52,7 +56,7 @@ class DbLog implements LoggerInterface {
     // Remove any backtraces since they may contain an unserializable variable.
     unset($context['backtrace']);
 
-    // Convert PSR3-style messages to String::format() style, so they can be
+    // Convert PSR3-style messages to SafeMarkup::format() style, so they can be
     // translated too in runtime.
     $message_placeholders = $this->parser->parseMessagePlaceholders($message, $context);
 
@@ -60,14 +64,14 @@ class DbLog implements LoggerInterface {
       ->insert('watchdog')
       ->fields(array(
         'uid' => $context['uid'],
-        'type' => substr($context['channel'], 0, 64),
+        'type' => Unicode::substr($context['channel'], 0, 64),
         'message' => $message,
         'variables' => serialize($message_placeholders),
         'severity' => $level,
-        'link' => substr($context['link'], 0, 255),
+        'link' => $context['link'],
         'location' => $context['request_uri'],
         'referer' => $context['referer'],
-        'hostname' => substr($context['ip'], 0, 128),
+        'hostname' => Unicode::substr($context['ip'], 0, 128),
         'timestamp' => $context['timestamp'],
       ))
       ->execute();

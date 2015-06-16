@@ -8,7 +8,6 @@
 namespace Drupal\taxonomy\Entity;
 
 use Drupal\Core\Config\Entity\ConfigEntityBundleBase;
-use Drupal\Core\Config\Entity\ThirdPartySettingsTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\taxonomy\VocabularyInterface;
 
@@ -42,11 +41,17 @@ use Drupal\taxonomy\VocabularyInterface;
  *     "overview-form" = "/admin/structure/taxonomy/manage/{taxonomy_vocabulary}/overview",
  *     "edit-form" = "/admin/structure/taxonomy/manage/{taxonomy_vocabulary}",
  *     "collection" = "/admin/structure/taxonomy",
+ *   },
+ *   config_export = {
+ *     "name",
+ *     "vid",
+ *     "description",
+ *     "hierarchy",
+ *     "weight",
  *   }
  * )
  */
 class Vocabulary extends ConfigEntityBundleBase implements VocabularyInterface {
-  use ThirdPartySettingsTrait;
 
   /**
    * The taxonomy vocabulary ID.
@@ -127,7 +132,7 @@ class Vocabulary extends ConfigEntityBundleBase implements VocabularyInterface {
       // Reflect machine name changes in the definitions of existing 'taxonomy'
       // fields.
       $field_ids = array();
-      $field_map = \Drupal::entityManager()->getFieldMapByFieldType('taxonomy_term_reference');
+      $field_map = \Drupal::entityManager()->getFieldMapByFieldType('entity_reference');
       foreach ($field_map as $entity_type => $field_storages) {
         foreach ($field_storages as $field_storage => $info) {
           $field_ids[] = $entity_type . '.' . $field_storage;
@@ -135,16 +140,21 @@ class Vocabulary extends ConfigEntityBundleBase implements VocabularyInterface {
       }
 
       $field_storages = \Drupal::entityManager()->getStorage('field_storage_config')->loadMultiple($field_ids);
+      $taxonomy_fields = array_filter($field_storages, function ($field_storage) {
+        return $field_storage->getType() == 'entity_reference' && $field_storage->getSetting('target_type') == 'taxonomy_term';
+      });
 
-      foreach ($field_storages as $field_storage) {
+      foreach ($taxonomy_fields as $field_storage) {
         $update_storage = FALSE;
 
-        foreach ($field_storage->settings['allowed_values'] as &$value) {
+        $allowed_values = $field_storage->getSetting('allowed_values');
+        foreach ($allowed_values as &$value) {
           if ($value['vocabulary'] == $this->getOriginalId()) {
             $value['vocabulary'] = $this->id();
             $update_storage = TRUE;
           }
         }
+        $field_storage->setSetting('allowed_values', $allowed_values);
 
         if ($update_storage) {
           $field_storage->save();
@@ -188,14 +198,17 @@ class Vocabulary extends ConfigEntityBundleBase implements VocabularyInterface {
       $modified_storage = FALSE;
       // Term reference fields may reference terms from more than one
       // vocabulary.
-      foreach ($field_storage->settings['allowed_values'] as $key => $allowed_value) {
+      foreach ($field_storage->getSetting('allowed_values') as $key => $allowed_value) {
         if (isset($vocabularies[$allowed_value['vocabulary']])) {
-          unset($field_storage->settings['allowed_values'][$key]);
+          $allowed_values = $field_storage->getSetting('allowed_values');
+          unset($allowed_values[$key]);
+          $field_storage->setSetting('allowed_values', $allowed_values);
           $modified_storage = TRUE;
         }
       }
       if ($modified_storage) {
-        if (empty($field_storage->settings['allowed_values'])) {
+        $allowed_values = $field_storage->getSetting('allowed_values');
+        if (empty($allowed_values)) {
           $field_storage->delete();
         }
         else {

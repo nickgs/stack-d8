@@ -79,9 +79,10 @@ class ShortcutSetsTest extends ShortcutTestBase {
     $this->drupalPostForm(NULL, $edit, t('Save changes'));
     $this->assertRaw(t('The shortcut set has been updated.'));
 
-    // Check to ensure that the shortcut weights have changed.
-    $weights = $this->getShortcutInformation($set, 'weight');
-    $this->assertEqual($weights, array(2, 1));
+    \Drupal::entityManager()->getStorage('shortcut')->resetCache();
+    // Check to ensure that the shortcut weights have changed and that
+    // ShortcutSet::.getShortcuts() returns shortcuts in the new order.
+    $this->assertIdentical(array_reverse(array_keys($shortcuts)), array_keys($set->getShortcuts()));
   }
 
   /**
@@ -104,7 +105,7 @@ class ShortcutSetsTest extends ShortcutTestBase {
   function testShortcutSetAssign() {
     $new_set = $this->generateShortcutSet($this->randomMachineName());
 
-    shortcut_set_assign_user($new_set, $this->shortcutUser);
+    \Drupal::entityManager()->getStorage('shortcut_set')->assignUser($new_set, $this->shortcutUser);
     $current_set = shortcut_current_displayed_set($this->shortcutUser);
     $this->assertTrue($new_set->id() == $current_set->id(), "Successfully switched another user's shortcut set.");
   }
@@ -133,6 +134,7 @@ class ShortcutSetsTest extends ShortcutTestBase {
     $this->assertText(t('The new set label is required.'));
     $current_set = shortcut_current_displayed_set($this->adminUser);
     $this->assertEqual($current_set->id(), $this->set->id(), 'Attempting to switch to a new shortcut set without providing a set name does not succeed.');
+    $this->assertFieldByXPath("//input[@name='label' and contains(concat(' ', normalize-space(@class), ' '), ' error ')]", NULL, 'The new set label field has the error class');
   }
 
   /**
@@ -150,25 +152,14 @@ class ShortcutSetsTest extends ShortcutTestBase {
   }
 
   /**
-   * Tests renaming a shortcut set to the same name as another set.
-   */
-  function testShortcutSetRenameAlreadyExists() {
-    $set = $this->generateShortcutSet($this->randomMachineName());
-    $existing_label = $this->set->label();
-    $this->drupalPostForm('admin/config/user-interface/shortcut/manage/' . $set->id(), array('label' => $existing_label), t('Save'));
-    $this->assertRaw(t('The shortcut set %name already exists. Choose another name.', array('%name' => $existing_label)));
-    $set = ShortcutSet::load($set->id());
-    $this->assertNotEqual($set->label(), $existing_label, format_string('The shortcut set %title cannot be renamed to %new-title because a shortcut set with that title already exists.', array('%title' => $set->label(), '%new-title' => $existing_label)));
-  }
-
-  /**
    * Tests unassigning a shortcut set.
    */
   function testShortcutSetUnassign() {
     $new_set = $this->generateShortcutSet($this->randomMachineName());
 
-    shortcut_set_assign_user($new_set, $this->shortcutUser);
-    shortcut_set_unassign_user($this->shortcutUser);
+    $shortcut_set_storage = \Drupal::entityManager()->getStorage('shortcut_set');
+    $shortcut_set_storage->assignUser($new_set, $this->shortcutUser);
+    $shortcut_set_storage->unassignUser($this->shortcutUser);
     $current_set = shortcut_current_displayed_set($this->shortcutUser);
     $default_set = shortcut_default_set($this->shortcutUser);
     $this->assertTrue($current_set->id() == $default_set->id(), "Successfully unassigned another user's shortcut set.");

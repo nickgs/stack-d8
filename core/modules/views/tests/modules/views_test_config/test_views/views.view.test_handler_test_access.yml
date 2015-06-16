@@ -1,4 +1,4 @@
-langcode: und
+langcode: en
 status: true
 dependencies: {  }
 id: test_handler_test_access
@@ -56,8 +56,6 @@ display:
           table: views_test_data
           field: access_callback_arguments
           plugin_id: standard
-      field_langcode: '***LANGUAGE_language_content***'
-      field_langcode_add_to_query: null
     display_plugin: default
     display_title: Master
     id: default

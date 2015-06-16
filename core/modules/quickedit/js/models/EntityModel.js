@@ -16,7 +16,7 @@
       el: null,
       // An entity ID, of the form "<entity type>/<entity ID>", e.g. "node/1".
       entityID: null,
-      // An entity instance ID. The first intance of a specific entity (i.e. with
+      // An entity instance ID. The first instance of a specific entity (i.e. with
       // a given entity ID) is assigned 0, the second 1, and so on.
       entityInstanceID: null,
       // The unique ID of this entity instance on the page, of the form "<entity
@@ -33,22 +33,24 @@
       // Indicates whether this instance of this entity is currently being
       // edited in-place.
       isActive: false,
-      // Whether one or more fields have already been stored in TempStore.
+      // Whether one or more fields have already been stored in
+      // PrivateTempStore.
       inTempStore: false,
-      // Whether one or more fields have already been stored in TempStore *or*
-      // the field that's currently being edited is in the 'changed' or a later
-      // state. In other words, this boolean indicates whether a "Save" button is
-      // necessary or not.
+      // Whether one or more fields have already been stored in PrivateTempStore
+      // *or* the field that's currently being edited is in the 'changed' or a
+      // later state. In other words, this boolean indicates whether a "Save"
+      // button is necessary or not.
       isDirty: false,
       // Whether the request to the server has been made to commit this entity.
       // Used to prevent multiple such requests.
       isCommitting: false,
       // The current processing state of an entity.
       state: 'closed',
-      // The IDs of the fields whose new values have been stored in TempStore. We
-      // must store this on the EntityModel as well (even though it already is on
-      // the FieldModel) because when a field is rerendered, its FieldModel is
-      // destroyed and this allows us to transition it back to the proper state.
+      // The IDs of the fields whose new values have been stored in
+      // PrivateTempStore. We must store this on the EntityModel as well (even
+      // though it already is on the FieldModel) because when a field is
+      // rerendered, its FieldModel is destroyed and this allows us to
+      // transition it back to the proper state.
       fieldsInTempStore: [],
       // A flag the tells the application that this EntityModel must be reloaded
       // in order to restore the original values to its fields in the client.
@@ -118,7 +120,7 @@
               fieldModel.set('state', 'candidate');
             });
           // For fields that are in a changed state, field values must first be
-          // stored in TempStore.
+          // stored in PrivateTempStore.
           fields.chain()
             .filter(function (fieldModel) {
               return _.intersection([fieldModel.get('state')], Drupal.quickedit.app.changedFieldStates).length;
@@ -205,16 +207,17 @@
       var previous = fieldModel.previous('state');
       var fieldsInTempStore = entityModel.get('fieldsInTempStore');
       // If the fieldModel changed to the 'saved' state: remember that this
-      // field was saved to TempStore.
+      // field was saved to PrivateTempStore.
       if (current === 'saved') {
-        // Mark the entity as saved in TempStore, so that we can pass the
-        // proper "reset TempStore" boolean value when communicating with the
-        // server.
+        // Mark the entity as saved in PrivateTempStore, so that we can pass the
+        // proper "reset PrivateTempStore" boolean value when communicating with
+        // the server.
         entityModel.set('inTempStore', true);
-        // Mark the field as saved in TempStore, so that visual indicators
-        // signifying just that may be rendered.
+        // Mark the field as saved in PrivateTempStore, so that visual
+        // indicators signifying just that may be rendered.
         fieldModel.set('inTempStore', true);
-        // Remember that this field is in TempStore, restore when rerendered.
+        // Remember that this field is in PrivateTempStore, restore when
+        // rerendered.
         fieldsInTempStore.push(fieldModel.get('fieldID'));
         fieldsInTempStore = _.uniq(fieldsInTempStore);
         entityModel.set('fieldsInTempStore', fieldsInTempStore);
@@ -271,11 +274,11 @@
           // Set the isDirty attribute when appropriate so that it is known when
           // to display the "Save" button in the entity toolbar.
           // Note that once a field has been changed, there's no way to discard
-          // that change, hence it will have to be saved into TempStore, or the
-          // in-place editing of this field will have to be stopped completely.
-          // In other words: once any field enters the 'changed' field, then for
-          // the remainder of the in-place editing session, the entity is by
-          // definition dirty.
+          // that change, hence it will have to be saved into PrivateTempStore,
+          // or the in-place editing of this field will have to be stopped
+          // completely. In other words: once any field enters the 'changed'
+          // field, then for the remainder of the in-place editing session, the
+          // entity is by definition dirty.
           if (fieldState === 'changed') {
             entityModel.set('isDirty', true);
           }
@@ -359,18 +362,10 @@
     save: function (options) {
       var entityModel = this;
 
-      // @todo Simplify this once https://drupal.org/node/1533366 lands.
-      // @see https://drupal.org/node/2029999.
-      var id = 'quickedit-save-entity';
-      // Create a temporary element to be able to use Drupal.ajax.
-      var $el = $('#quickedit-entity-toolbar').find('.action-save'); // This is the span element inside the button.
       // Create a Drupal.ajax instance to save the entity.
-      var entitySaverAjax = new Drupal.ajax(id, $el, {
+      var entitySaverAjax = Drupal.ajax({
         url: Drupal.url('quickedit/entity/' + entityModel.get('entityID')),
-        event: 'quickedit-save.quickedit',
-        progress: {type: 'none'},
         error: function () {
-          $el.off('quickedit-save.quickedit');
           // Let the Drupal.quickedit.EntityModel Backbone model's error()=
           // method handle errors.
           options.error.call(entityModel);
@@ -378,11 +373,9 @@
       });
       // Entity saved successfully.
       entitySaverAjax.commands.quickeditEntitySaved = function (ajax, response, status) {
-        // Clean up.
-        $(ajax.element).off('quickedit-save.quickedit');
-        // All fields have been moved from TempStore to permanent storage, update
-        // the "inTempStore" attribute on FieldModels, on the EntityModel and
-        // clear EntityModel's "fieldInTempStore" attribute.
+        // All fields have been moved from PrivateTempStore to permanent
+        // storage, update the "inTempStore" attribute on FieldModels, on the
+        // EntityModel and clear EntityModel's "fieldInTempStore" attribute.
         entityModel.get('fields').each(function (fieldModel) {
           fieldModel.set('inTempStore', false);
         });
@@ -396,7 +389,7 @@
       };
       // Trigger the AJAX request, which will will return the
       // quickeditEntitySaved AJAX command to which we then react.
-      $el.trigger('quickedit-save.quickedit');
+      entitySaverAjax.execute();
     },
 
     /**
@@ -447,7 +440,7 @@
         }
       }
       else if (currentIsCommitting === true && nextIsCommitting === true) {
-        return "isCommiting is a mutex, hence only changes are allowed";
+        return "isCommitting is a mutex, hence only changes are allowed";
       }
     },
 
@@ -566,13 +559,14 @@
       // User has clicked the 'Save' button (and has thus changed at least one
       // field).
       // - Trigger: user.
-      // - Guarantees: see 'opened', plus: either a changed field is in TempStore,
-      //   or the user has just modified a field without activating (switching to)
-      //   another field.
-      // - Expected behavior: 1) if any of the fields are not yet in TempStore,
-      //   save them to TempStore, 2) if then any of the fields has the 'invalid'
-      //   state, then change the entity state back to 'opened', otherwise: save
-      //   the entity by committing it from TempStore into permanent storage.
+      // - Guarantees: see 'opened', plus: either a changed field is in
+      //   PrivateTempStore, or the user has just modified a field without
+      //   activating (switching to) another field.
+      // - Expected behavior: 1) if any of the fields are not yet in
+      //   PrivateTempStore, save them to PrivateTempStore, 2) if then any of
+      //   the fields has the 'invalid' state, then change the entity state back
+      //   to 'opened', otherwise: save the entity by committing it from
+      //   PrivateTempStore into permanent storage.
       'committing',
       // User has clicked the 'Close' button, or has clicked the 'Save' button and
       // that was successfully completed.

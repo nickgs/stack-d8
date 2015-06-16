@@ -10,7 +10,11 @@ namespace Drupal\quickedit\Tests;
 use Drupal\Component\Serialization\Json;
 use Drupal\Component\Utility\Unicode;
 use Drupal\block_content\Entity\BlockContent;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\file\Entity\File;
 use Drupal\node\Entity\Node;
+use Drupal\node\Entity\NodeType;
 use Drupal\simpletest\WebTestBase;
 
 /**
@@ -26,7 +30,13 @@ class QuickEditLoadingTest extends WebTestBase {
    *
    * @var array
    */
-  public static $modules = array('contextual', 'quickedit', 'filter', 'node');
+  public static $modules = array(
+    'contextual',
+    'quickedit',
+    'filter',
+    'node',
+    'image',
+  );
 
   /**
    * An user with permissions to create and edit articles.
@@ -97,7 +107,7 @@ class QuickEditLoadingTest extends WebTestBase {
     // Retrieving the metadata should result in an empty 403 response.
     $post = array('fields[0]' => 'node/1/body/en/full');
     $response = $this->drupalPost('quickedit/metadata', 'application/json', $post);
-    $this->assertIdentical('{}', $response);
+    $this->assertIdentical('{"message":""}', $response);
     $this->assertResponse(403);
 
     // Quick Edit's JavaScript would SearchRankingTestnever hit these endpoints if the metadata
@@ -124,7 +134,7 @@ class QuickEditLoadingTest extends WebTestBase {
     $this->assertResponse(403);
     $post = array('nocssjs' => 'true');
     $response = $this->drupalPost('quickedit/entity/' . 'node/1', 'application/json', $post);
-    $this->assertIdentical('{}', $response);
+    $this->assertIdentical('{"message":""}', $response);
     $this->assertResponse(403);
   }
 
@@ -214,7 +224,7 @@ class QuickEditLoadingTest extends WebTestBase {
       $post += $edit + $this->getAjaxPageStatePostData();
 
       // Submit field form and check response. This should store the updated
-      // entity in TempStore on the server.
+      // entity in PrivateTempStore on the server.
       $response = $this->drupalPost('quickedit/form/' . 'node/1/body/en/full', 'application/vnd.drupal-ajax', $post);
       $this->assertResponse(200);
       $ajax_commands = Json::decode($response);
@@ -227,7 +237,7 @@ class QuickEditLoadingTest extends WebTestBase {
       $this->drupalGet('node/1');
       $this->assertText('How are you?');
 
-      // Save the entity by moving the TempStore values to entity storage.
+      // Save the entity by moving the PrivateTempStore values to entity storage.
       $post = array('nocssjs' => 'true');
       $response = $this->drupalPost('quickedit/entity/' . 'node/1', 'application/json', $post);
       $this->assertResponse(200);
@@ -249,9 +259,9 @@ class QuickEditLoadingTest extends WebTestBase {
 
       // Now configure this node type to create new revisions automatically,
       // then again retrieve the field form, fill it, submit it (so it ends up
-      // in TempStore) and then save the entity. Now there should be two
+      // in PrivateTempStore) and then save the entity. Now there should be two
       // revisions.
-      $node_type = entity_load('node_type', 'article');
+      $node_type = NodeType::load('article');
       $node_type->setNewRevision(TRUE);
       $node_type->save();
 
@@ -359,7 +369,7 @@ class QuickEditLoadingTest extends WebTestBase {
       $post += $edit + $this->getAjaxPageStatePostData();
 
       // Submit field form and check response. This should store the
-      // updated entity in TempStore on the server.
+      // updated entity in PrivateTempStore on the server.
       $response = $this->drupalPost('quickedit/form/' . 'node/1/title/en/full', 'application/vnd.drupal-ajax', $post);
       $this->assertResponse(200);
       $ajax_commands = Json::decode($response);
@@ -371,7 +381,7 @@ class QuickEditLoadingTest extends WebTestBase {
       $this->drupalGet('node/1');
       $this->assertNoText('Obligatory question');
 
-      // Save the entity by moving the TempStore values to entity storage.
+      // Save the entity by moving the PrivateTempStore values to entity storage.
       $post = array('nocssjs' => 'true');
       $response = $this->drupalPost('quickedit/entity/' . 'node/1', 'application/json', $post);
       $this->assertResponse(200);
@@ -525,5 +535,45 @@ class QuickEditLoadingTest extends WebTestBase {
     // Check that the data- attribute is present.
     $this->drupalGet('');
     $this->assertRaw('data-quickedit-entity-id="block_content/1"');
+  }
+
+  /**
+   * Tests that Quick Edit can handle an image field.
+   */
+  public function testImageField() {
+    // Add an image field to the content type.
+    FieldStorageConfig::create([
+      'field_name' => 'field_image',
+      'type' => 'image',
+      'entity_type' => 'node',
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'field_image',
+      'field_type' => 'image',
+      'label' => t('Image'),
+      'entity_type' => 'node',
+      'bundle' => 'article',
+    ])->save();
+    entity_get_form_display('node', 'article', 'default')
+      ->setComponent('field_image', [
+        'type' => 'image_image',
+      ])
+      ->save();
+
+    // Add an image to the node.
+    $this->drupalLogin($this->editorUser);
+    $image = $this->drupalGetTestFiles('image')[0];
+    $this->drupalPostForm('node/1/edit', [
+      'files[field_image_0]' => $image->uri,
+    ], t('Upload'));
+    $this->drupalPostForm(NULL, [
+      'field_image[0][alt]' => 'Vivamus aliquet elit',
+    ], t('Save'));
+
+    // The image field form should load normally.
+    $response = $this->drupalPost('quickedit/form/node/1/field_image/en/full', 'application/vnd.drupal-ajax', ['nocssjs' => 'true'] + $this->getAjaxPageStatePostData());
+    $this->assertResponse(200);
+    $ajax_commands = Json::decode($response);
+    $this->assertIdentical('<form ', Unicode::substr($ajax_commands[0]['data'], 0, 6), 'The quickeditFieldForm command contains a form.');
   }
 }

@@ -67,7 +67,7 @@ function field_help($route_name, RouteMatchInterface $route_match) {
       $field_ui_url = \Drupal::moduleHandler()->moduleExists('field_ui') ? \Drupal::url('help.page', array('name' => 'field_ui')) : '#';
       $output = '';
       $output .= '<h3>' . t('About') . '</h3>';
-      $output .= '<p>' . t('The Field module allows custom data fields to be defined for <em>entity</em> types (see below). The Field module takes care of storing, loading, editing, and rendering field data. Most users will not interact with the Field module directly, but will instead use the <a href="!field-ui-help">Field UI module</a> user interface. Module developers can use the Field API to make new entity types "fieldable" and thus allow fields to be attached to them. For more information, see the <a href="!field">online documentation for the Field module</a>.', array('!field-ui-help' => $field_ui_url, '!field' => 'https://drupal.org/documentation/modules/field')). '</p>';
+      $output .= '<p>' . t('The Field module allows custom data fields to be defined for <em>entity</em> types (see below). The Field module takes care of storing, loading, editing, and rendering field data. Most users will not interact with the Field module directly, but will instead use the <a href="!field-ui-help">Field UI module</a> user interface. Module developers can use the Field API to make new entity types "fieldable" and thus allow fields to be attached to them. For more information, see the <a href="!field">online documentation for the Field module</a>.', array('!field-ui-help' => (\Drupal::moduleHandler()->moduleExists('field_ui')) ? \Drupal::url('help.page', array('name' => 'field_ui')) :'#', '!field' => 'https://www.drupal.org/documentation/modules/field')). '</p>';
       $output .= '<h3>' . t('Terminology') . '</h3>';
       $output .= '<dl>';
       $output .= '<dt>' . t('Entities and entity types') . '</dt>';
@@ -84,13 +84,15 @@ function field_help($route_name, RouteMatchInterface $route_match) {
       $output .= '<h3>' . t('Uses') . '</h3>';
       $output .= '<dl>';
       $output .= '<dt>' . t('Enabling field types, widgets, and formatters') . '</dt>';
-      $output .= '<dd>' . t('The Field module provides the infrastructure for fields; the field types, formatters, and widgets are provided by Drupal core or additional modules. Some of the modules are required; the optional modules can be enabled from the <a href="!modules">Extend administration page</a>. Additional fields, formatters, and widgets may be provided by contributed modules, which you can find in the <a href="!contrib">contributed module section of Drupal.org</a>.', array('!modules' => \Drupal::url('system.modules_list'), '!contrib' => 'https://drupal.org/project/modules'));
+      $output .= '<dd>' . t('The Field module provides the infrastructure for fields; the field types, formatters, and widgets are provided by Drupal core or additional modules. Some of the modules are required; the optional modules can be enabled from the <a href="!modules">Extend administration page</a>. Additional fields, formatters, and widgets may be provided by contributed modules, which you can find in the <a href="!contrib">contributed module section of Drupal.org</a>.', array('!modules' => \Drupal::url('system.modules_list'), '!contrib' => 'https://www.drupal.org/project/modules')) . '</dd>';
+
+      $output .= '<h3>' . t('Field, widget, and formatter information') . '</h3>';
 
       // Make a list of all widget, formatter, and field modules currently
       // enabled, ordered by displayed module name (module names are not
       // translated).
       $items = array();
-      $info = system_get_info('module');
+      $modules = \Drupal::moduleHandler()->getModuleList();
       $widgets = \Drupal::service('plugin.manager.field.widget')->getDefinitions();
       $field_types = \Drupal::service('plugin.manager.field.field_type')->getUiDefinitions();
       $formatters = \Drupal::service('plugin.manager.field.formatter')->getDefinitions();
@@ -103,8 +105,8 @@ function field_help($route_name, RouteMatchInterface $route_match) {
       foreach ($providers as $provider) {
         // Skip plugins provided by core components as they do not implement
         // hook_help().
-        if (isset($info[$provider]['name'])) {
-          $display = $info[$provider]['name'];
+        if (isset($modules[$provider])) {
+          $display = \Drupal::moduleHandler()->getName($provider);
           if (\Drupal::moduleHandler()->implementsHook($provider, 'help')) {
             $items[] = \Drupal::l($display, new Url('help.page', array('name' => $provider)));
           }
@@ -114,14 +116,22 @@ function field_help($route_name, RouteMatchInterface $route_match) {
         }
       }
       if ($items) {
-        $output .= ' ' . t('Currently enabled field, formatter, and widget modules:');
+        $output .= '<dt>' . t('Provided by modules') . '</dt>';
+        $output .= '<dd>' . t('Here is a list of the currently enabled field, formatter, and widget modules:');
         $item_list = array(
           '#theme' => 'item_list',
           '#items' => $items,
         );
         $output .= drupal_render($item_list);
+        $output .= '</dd>';
       }
-      $output .= '</dd></dl>';
+
+      $output .= '<dt>' . t('Provided by Drupal core') . '</dt>';
+      $output .= '<dd>' . t('As mentioned previously, some field types, widgets, and formatters are provided by Drupal core. Here are some notes on how to use some of these:');
+      $output .= '<ul>';
+      $output .= '<li>' . t('<strong>Number fields</strong>: When you add a number field you can choose from three types: <em>decimal</em>, <em>float</em>, and <em>integer</em>. The <em>decimal</em> number field type allows users to enter exact decimal values, with fixed numbers of decimal places. The <em>float</em> number field type allows users to enter approximate decimal values. The <em>integer</em> number field type allows users to enter whole numbers, such as years (for example, 2012) or values (for example, 1, 2, 5, 305). It does not allow decimals.') . '</li>';
+      $output .= '</ul></dd>';
+      $output .= '</dl>';
       return $output;
   }
 }
@@ -153,7 +163,7 @@ function field_system_info_alter(&$info, Extension $file, $type) {
       // remains no actual, non-deleted fields)
       $non_deleted = FALSE;
       foreach ($field_storages as $field_storage) {
-        if (empty($field_storage->deleted)) {
+        if (!$field_storage->isDeleted()) {
           $non_deleted = TRUE;
           break;
         }
@@ -217,9 +227,9 @@ function field_entity_bundle_field_info(EntityTypeInterface $entity_type, $bundl
 function field_entity_bundle_rename($entity_type, $bundle_old, $bundle_new) {
   $fields = entity_load_multiple_by_properties('field_config', array('entity_type' => $entity_type, 'bundle' => $bundle_old, 'include_deleted' => TRUE));
   foreach ($fields as $field) {
-    $id_new = $field->entity_type . '.' . $bundle_new . '.' . $field->field_name;
+    $id_new = $field->getTargetEntityTypeId() . '.' . $bundle_new . '.' . $field->getName();
     $field->set('id', $id_new);
-    $field->bundle = $bundle_new;
+    $field->set('bundle', $bundle_new);
     // Save non-deleted fields.
     if (!$field->isDeleted()) {
       $field->allowBundleRename();

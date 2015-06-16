@@ -7,14 +7,10 @@
 
 namespace Drupal\Tests\Core\Path;
 
-use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\Language\Language;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Path\AliasManager;
-use Drupal\Core\Url;
 use Drupal\Tests\UnitTestCase;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 
 /**
  * @coversDefaultClass \Drupal\Core\Path\AliasManager
@@ -211,7 +207,7 @@ class AliasManagerTest extends UnitTestCase {
     // This needs to write out the cache.
     $this->cache->expects($this->once())
       ->method('set')
-      ->with($this->cacheKey, array($language->getId() => array($path)), REQUEST_TIME + (60 * 60 * 24));
+      ->with($this->cacheKey, array($language->getId() => array($path)), (int) $_SERVER['REQUEST_TIME'] + (60 * 60 * 24));
 
     $this->aliasManager->writeCache();
   }
@@ -249,7 +245,7 @@ class AliasManagerTest extends UnitTestCase {
     // This needs to write out the cache.
     $this->cache->expects($this->once())
       ->method('set')
-      ->with($this->cacheKey, array($language->getId() => array($path)), REQUEST_TIME + (60 * 60 * 24));
+      ->with($this->cacheKey, array($language->getId() => array($path)), (int) $_SERVER['REQUEST_TIME'] + (60 * 60 * 24));
 
     $this->aliasManager->writeCache();
   }
@@ -350,7 +346,7 @@ class AliasManagerTest extends UnitTestCase {
     );
     $this->cache->expects($this->once())
       ->method('set')
-      ->with($this->cacheKey, $expected_new_cache, REQUEST_TIME + (60 * 60 * 24));
+      ->with($this->cacheKey, $expected_new_cache, (int) $_SERVER['REQUEST_TIME'] + (60 * 60 * 24));
     $this->aliasManager->writeCache();
   }
 
@@ -451,8 +447,45 @@ class AliasManagerTest extends UnitTestCase {
     );
     $this->cache->expects($this->once())
       ->method('set')
-      ->with($this->cacheKey, $expected_new_cache, REQUEST_TIME + (60 * 60 * 24));
+      ->with($this->cacheKey, $expected_new_cache, (int) $_SERVER['REQUEST_TIME'] + (60 * 60 * 24));
     $this->aliasManager->writeCache();
+  }
+
+  /**
+   * @covers ::cacheClear
+   */
+  public function testCacheClear() {
+    $path = 'path';
+    $alias = 'alias';
+    $language = $this->setUpCurrentLanguage();
+    $this->aliasStorage->expects($this->exactly(2))
+      ->method('lookupPathAlias')
+      ->with($path, $language->getId())
+      ->willReturn($alias);
+    $this->aliasWhitelist->expects($this->any())
+      ->method('get')
+      ->willReturn(TRUE);
+
+    // Populate the lookup map.
+    $this->assertEquals($alias, $this->aliasManager->getAliasByPath($path, $language->getId()));
+
+    // Check that the cache is populated.
+    $original_storage = clone $this->aliasStorage;
+    $this->aliasStorage->expects($this->never())
+      ->method('lookupPathSource');
+    $this->assertEquals($path, $this->aliasManager->getPathByAlias($alias, $language->getId()));
+
+    // Clear specific source.
+    $this->cache->expects($this->exactly(2))
+      ->method('delete');
+    $this->aliasManager->cacheClear($path);
+
+    // Ensure cache has been cleared (this will be the 2nd call to
+    // `lookupPathAlias` if cache is cleared).
+    $this->assertEquals($alias, $this->aliasManager->getAliasByPath($path, $language->getId()));
+
+    // Clear non-existent source.
+    $this->aliasManager->cacheClear('non-existent');
   }
 
   /**
@@ -506,7 +539,7 @@ class AliasManagerTest extends UnitTestCase {
     );
     $this->cache->expects($this->once())
       ->method('set')
-      ->with($this->cacheKey, $expected_new_cache, REQUEST_TIME + (60 * 60 * 24));
+      ->with($this->cacheKey, $expected_new_cache, (int) $_SERVER['REQUEST_TIME'] + (60 * 60 * 24));
     $this->aliasManager->writeCache();
   }
 

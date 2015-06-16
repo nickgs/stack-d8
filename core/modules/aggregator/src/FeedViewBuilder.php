@@ -73,7 +73,7 @@ class FeedViewBuilder extends EntityViewBuilder {
 
         if ($view_mode == 'full') {
           // Also add the pager.
-          $build[$id]['pager'] = array('#theme' => 'pager');
+          $build[$id]['pager'] = array('#type' => 'pager');
         }
       }
 
@@ -94,7 +94,7 @@ class FeedViewBuilder extends EntityViewBuilder {
         if ($image && $label && $link_href) {
           $link_title = array(
             '#theme' => 'image',
-            '#path' => $image,
+            '#uri' => $image,
             '#alt' => $label,
           );
           $image_link = array(
@@ -103,7 +103,6 @@ class FeedViewBuilder extends EntityViewBuilder {
             '#url' => Url::fromUri($link_href),
             '#options' => array(
               'attributes' => array('class' => array('feed-image')),
-              'html' => TRUE,
             ),
           );
         }
@@ -127,7 +126,6 @@ class FeedViewBuilder extends EntityViewBuilder {
           )),
           '#url' => Url::fromRoute('entity.aggregator_feed.canonical', ['aggregator_feed' => $entity->id()]),
           '#options' => array(
-            'html' => TRUE,
             'attributes' => array(
               'title' => $title_stripped,
             ),

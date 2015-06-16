@@ -5,7 +5,7 @@
  * Callbacks and hooks related to form system.
  */
 
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 
 /**
  * @addtogroup callbacks
@@ -79,7 +79,7 @@ function callback_batch_operation($MULTIPLE_PARAMS, &$context) {
     node_save($node);
 
     // Store some result for post-processing in the finished callback.
-    $context['results'][] = String::checkPlain($node->title);
+    $context['results'][] = SafeMarkup::checkPlain($node->title);
 
     // Update our progress information.
     $context['sandbox']['progress']++;
@@ -153,8 +153,8 @@ function callback_batch_finished($success, $results, $operations) {
  */
 function hook_ajax_render_alter(array &$data) {
   // Inject any new status messages into the content area.
-  $status_messages = array('#theme' => 'status_messages');
-  $command = new \Drupal\Core\Ajax\PrependCommand('#block-system-main .content', drupal_render($status_messages));
+  $status_messages = array('#type' => 'status_messages');
+  $command = new \Drupal\Core\Ajax\PrependCommand('#block-system-main .content', \Drupal::service('renderer')->renderRoot($status_messages));
   $data[] = $command->render();
 }
 

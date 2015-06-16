@@ -15,14 +15,14 @@ use Drupal\Component\Utility\Bytes;
 use Drupal\Component\Utility\Crypt;
 use Drupal\Component\Utility\Html;
 use Drupal\Component\Utility\Number;
-use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\SortArray;
-use Drupal\Component\Utility\String;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\Tags;
 use Drupal\Component\Utility\UrlHelper;
 use Drupal\Core\Asset\AttachedAssets;
 use Drupal\Core\Cache\Cache;
 use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\Render\Renderer;
 use Drupal\Core\Site\Settings;
 use Drupal\Core\Url;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,7 +33,6 @@ use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Routing\GeneratorNotInitializedException;
 use Drupal\Core\Template\Attribute;
 use Drupal\Core\Render\Element;
-use Drupal\Core\Render\Renderer;
 use Drupal\Core\Session\AnonymousUserSession;
 
 /**
@@ -210,33 +209,23 @@ function drupal_get_html_head($render = TRUE) {
  * previous request, that destination is returned. As such, a destination can
  * persist across multiple pages.
  *
- * @return
+ * @return array
  *   An associative array containing the key:
- *   - destination: The path provided via the destination query string or, if
- *     not available, the current path.
+ *   - destination: The value of the current request's 'destination' query
+ *     parameter, if present. This can be either a relative or absolute URL.
+ *     However, for security, redirection to external URLs is not performed.
+ *     If the query parameter isn't present, then the URL of the current
+ *     request is returned.
+ *
+ * @see \Drupal\Core\EventSubscriber\RedirectResponseSubscriber::checkRedirectUrl()
  *
  * @ingroup form_api
+ *
+ * @deprecated in Drupal 8.0.x-dev, will be removed before Drupal 9.0.0.
+ *   Use the redirect.destination service.
  */
 function drupal_get_destination() {
-  $destination = &drupal_static(__FUNCTION__);
-
-  if (isset($destination)) {
-    return $destination;
-  }
-
-  $query = \Drupal::request()->query;
-  if ($query->has('destination')) {
-    $destination = array('destination' => $query->get('destination'));
-  }
-  else {
-    $path = \Drupal::routeMatch()->getRouteName() ? Url::fromRouteMatch(\Drupal::routeMatch())->getInternalPath() : '';
-    $query = UrlHelper::buildQuery(UrlHelper::filterQueryParameters($query->all()));
-    if ($query != '') {
-      $path .= '?' . $query;
-    }
-    $destination = array('destination' => $path);
-  }
-  return $destination;
+  return \Drupal::destination()->getAsArray();
 }
 
 /**
@@ -248,17 +237,17 @@ function drupal_get_destination() {
 /**
  * Verifies the syntax of the given email address.
  *
- * This uses the
- * @link http://php.net/manual/filter.filters.validate.php PHP email validation filter. @endlink
- *
- * @param $mail
+ * @param string $mail
  *   A string containing an email address.
  *
- * @return
+ * @return bool
  *   TRUE if the address is in a valid format.
+ *
+ * @deprecated in Drupal 8.0.x-dev, will be removed before Drupal 9.0.0.
+ *   Use \Drupal::service('email.validator')->isValid().
  */
 function valid_email_address($mail) {
-  return (bool)filter_var($mail, FILTER_VALIDATE_EMAIL);
+  return \Drupal::service('email.validator')->isValid($mail);
 }
 
 /**
@@ -270,7 +259,7 @@ function valid_email_address($mail) {
  * @{
  * Functions to sanitize values.
  *
- * See http://drupal.org/writing-secure-code for information
+ * See https://www.drupal.org/writing-secure-code for information
  * on writing secure code.
  */
 
@@ -290,10 +279,10 @@ function valid_email_address($mail) {
  *   \Drupal\Component\Utility\UrlHelper::stripDangerousProtocols() instead.
  *
  * @see \Drupal\Component\Utility\UrlHelper::stripDangerousProtocols()
- * @see \Drupal\Component\Utility\String::checkPlain()
+ * @see \Drupal\Component\Utility\SafeMarkup::checkPlain()
  */
 function check_url($uri) {
-  return String::checkPlain(UrlHelper::stripDangerousProtocols($uri));
+  return SafeMarkup::checkPlain(UrlHelper::stripDangerousProtocols($uri));
 }
 
 /**
@@ -305,53 +294,6 @@ function check_url($uri) {
  * @{
  * Functions to format numbers, strings, dates, etc.
  */
-
-/**
- * Formats XML elements.
- *
- * Note: It is the caller's responsibility to sanitize any input parameters.
- * This function does not perform sanitization.
- *
- * @param $array
- *   An array where each item represents an element and is either a:
- *   - (key => value) pair (<key>value</key>)
- *   - Associative array with fields:
- *     - 'key': The element name. Element names are not sanitized, so do not
- *       pass user input.
- *     - 'value': element contents
- *     - 'attributes': associative array of element attributes
- *
- * In both cases, 'value' can be a simple string, or it can be another array
- * with the same format as $array itself for nesting.
- */
-function format_xml_elements($array) {
-  $output = '';
-  foreach ($array as $key => $value) {
-    if (is_numeric($key)) {
-      if ($value['key']) {
-        $output .= ' <' . $value['key'];
-        if (isset($value['attributes']) && is_array($value['attributes'])) {
-          $output .= new Attribute($value['attributes']);
-        }
-
-        if (isset($value['value']) && $value['value'] != '') {
-          $output .= '>' . (is_array($value['value']) ? format_xml_elements($value['value']) : String::checkPlain($value['value'])) . '</' . $value['key'] . ">\n";
-        }
-        else {
-          $output .= " />\n";
-        }
-      }
-    }
-    else {
-      $output .= ' <' . $key . '>' . (is_array($value) ? format_xml_elements($value) : String::checkPlain($value)) . "</$key>\n";
-    }
-  }
-  // @todo This is marking the output string as safe HTML, but we have only
-  //   sanitized the attributes and tag values, not the tag names, and we
-  //   cannot guarantee the assembled markup is safe. Consider a fix in:
-  //   https://www.drupal.org/node/2296885
-  return SafeMarkup::set($output);
-}
 
 /**
  * Generates a string representation for the given byte count.
@@ -484,33 +426,6 @@ function _format_date_callback(array $matches = NULL, $new_langcode = NULL) {
  */
 
 /**
- * Generates an internal or external URL.
- *
- * When creating links in modules, consider whether l() could be a better
- * alternative than url().
- *
- * @see \Drupal\Core\Url::fromUri()
- * @see \Drupal\Core\Url::fromRoute()
- * @see \Drupal\Core\Url::toString()
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.0.
- *   Use \Drupal\Core\Url::fromRoute() for internal paths served by Drupal
- *   controllers or \Drupal\Core\Url::fromUri() for external paths or
- *   non-controller or sub-domain URIs such as core/install.php. Note that
- *   \Drupal\Core\Url::fromUri() expects a valid URI including the scheme. URIs
- *   from the same sub-domain that are not handled by Drupal controllers should
- *   be prepended with base://. For example:
- * @code
- * $installer_url = \Drupal\Core\Url::fromUri('base://core/install.php')->toString();
- * $external_url = \Drupal\Core\Url::fromUri('http://example.com', ['query' => ['foo' => 'bar']])->toString();
- * $internal_url = \Drupal\Core\Url::fromRoute('system.admin')->toString();
- * @endcode
- */
-function _url($path = NULL, array $options = array()) {
-  return \Drupal::urlGenerator()->generateFromPath($path, $options);
-}
-
-/**
  * Formats an attribute string for an HTTP header.
  *
  * @param $attributes
@@ -528,152 +443,6 @@ function drupal_http_header_attributes(array $attributes = array()) {
     $data = $attribute . '="' . $data . '"';
   }
   return $attributes ? ' ' . implode('; ', $attributes) : '';
-}
-
-/**
- * Formats an internal or external URL link as an HTML anchor tag.
- *
- * This function correctly handles aliased paths and adds an 'active' class
- * attribute to links that point to the current page (for theming), so all
- * internal links output by modules should be generated by this function if
- * possible.
- *
- * However, for links enclosed in translatable text you should use t() and
- * embed the HTML anchor tag directly in the translated string. For example:
- * @code
- * t('Visit the <a href="@url">settings</a> page', array('@url' => \Drupal::url('system.admin')));
- * @endcode
- * This keeps the context of the link title ('settings' in the example) for
- * translators.
- *
- * This function does not support generating links from internal routes. For
- * that use \Drupal\Core\Utility\LinkGenerator::generate(), which is exposed via
- * the 'link_generator' service. It requires an internal route name and does not
- * support external URLs. Using Drupal 7 style system paths should be avoided if
- * possible but l() should still be used when rendering links to external URLs.
- *
- * @param string|array $text
- *   The link text for the anchor tag as a translated string or render array.
- * @param string $path
- *   The internal path or external URL being linked to, such as "node/34" or
- *   "http://example.com/foo". After the url() function is called to construct
- *   the URL from $path and $options, the resulting URL is passed through
- *   \Drupal\Component\Utility\String::checkPlain() before it is inserted into
- *   the HTML anchor tag, to ensure well-formed HTML. See url() for more
- *   information and notes.
- * @param array $options
- *   An associative array of additional options. Defaults to an empty array. It
- *   may contain the following elements.
- *   - 'attributes': An associative array of HTML attributes to apply to the
- *     anchor tag. If element 'class' is included, it must be an array; 'title'
- *     must be a string; other elements are more flexible, as they just need
- *     to work as an argument for the constructor of the class
- *     Drupal\Core\Template\Attribute($options['attributes']).
- *   - 'html' (default FALSE): Whether $text is HTML or just plain-text. For
- *     example, to make an image tag into a link, this must be set to TRUE, or
- *     you will see the escaped HTML image tag. $text is not sanitized if
- *     'html' is TRUE. The calling function must ensure that $text is already
- *     safe.
- *   - 'language': An optional language object. If the path being linked to is
- *     internal to the site, $options['language'] is used to determine whether
- *     the link is "active", or pointing to the current page (the language as
- *     well as the path must match). This element is also used by url().
- *   - 'set_active_class': Whether l() should compare the $path, language and
- *     query options to the current URL to determine whether the link is
- *     "active". Defaults to FALSE. If TRUE, an "active" class will be applied
- *     to the link. It is important to use this sparingly since it is usually
- *     unnecessary and requires extra processing.
- *     For anonymous users, the "active" class will be calculated on the server,
- *     because most sites serve each anonymous user the same cached page anyway.
- *     For authenticated users, the "active" class will be calculated on the
- *     client (through JavaScript), only data- attributes are added to links to
- *     prevent breaking the render cache. The JavaScript is added in
- *     system_page_attachments().
- *   - Additional $options elements used by the url() function.
- *
- * @return string
- *   An HTML string containing a link to the given path.
- *
- * @see _url()
- * @see system_page_attachments()
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.0.
- *   Use \Drupal::l($text, $url) where $url is an instance of
- *   \Drupal\Core\Url. To build a \Drupal\Core\Url object for internal paths
- *   served by Drupal controllers use \Drupal\Core\Url::fromRoute(). For
- *   external paths or non-controller or sub-domain URIs such as
- *   core/install.php use \Drupal\Core\Url::fromUri(). Note that
- *   \Drupal\Core\Url::fromUri() expects a valid URI including the scheme. URIs
- *   from the same sub-domain that are not handled by Drupal controllers should
- *   be prepended with base://. For example:
- * @code
- * $installer_url = \Drupal\Core\Url::fromUri('base://core/install.php')->toString();
- * $installer_link = \Drupal::l($text, $installer_url);
- * $external_url = \Drupal\Core\Url::fromUri('http://example.com', ['query' => ['foo' => 'bar']])->toString();
- * $external_link = \Drupal::l($text, $external_url);
- * $internal_url = \Drupal\Core\Url::fromRoute('system.admin')->toString();
- * $internal_link = \Drupal::l($text, $internal_url);
- * @endcode
- */
-function _l($text, $path, array $options = array()) {
-  // Start building a structured representation of our link to be altered later.
-  $variables = array(
-    'text' => is_array($text) ? drupal_render($text) : $text,
-    'path' => $path,
-    'options' => $options,
-  );
-
-  // Merge in default options.
-  $variables['options'] += array(
-    'attributes' => array(),
-    'query' => array(),
-    'html' => FALSE,
-    'language' => NULL,
-    'set_active_class' => FALSE,
-  );
-
-  // Add a hreflang attribute if we know the language of this link's url and
-  // hreflang has not already been set.
-  if (!empty($variables['options']['language']) && !isset($variables['options']['attributes']['hreflang'])) {
-    $variables['options']['attributes']['hreflang'] = $variables['options']['language']->getId();
-  }
-
-  // Set the "active" class if the 'set_active_class' option is not empty.
-  if (!empty($variables['options']['set_active_class'])) {
-    // Add a "data-drupal-link-query" attribute to let the drupal.active-link
-    // library know the query in a standardized manner.
-    if (!empty($variables['options']['query'])) {
-      $query = $variables['options']['query'];
-      ksort($query);
-      $variables['options']['attributes']['data-drupal-link-query'] = Json::encode($query);
-    }
-
-    // Add a "data-drupal-link-system-path" attribute to let the
-    // drupal.active-link library know the path in a standardized manner.
-    if (!isset($variables['options']['attributes']['data-drupal-link-system-path'])) {
-      $variables['options']['attributes']['data-drupal-link-system-path'] = \Drupal::service('path.alias_manager')->getPathByAlias($path);
-    }
-  }
-
-  // Remove all HTML and PHP tags from a tooltip, calling expensive strip_tags()
-  // only when a quick strpos() gives suspicion tags are present.
-  if (isset($variables['options']['attributes']['title']) && strpos($variables['options']['attributes']['title'], '<') !== FALSE) {
-    $variables['options']['attributes']['title'] = strip_tags($variables['options']['attributes']['title']);
-  }
-
-  // Allow other modules to modify the structure of the link.
-  \Drupal::moduleHandler()->alter('link', $variables);
-
-  // Move attributes out of options. url() doesn't need them.
-  $attributes = new Attribute($variables['options']['attributes']);
-  unset($variables['options']['attributes']);
-
-  // The result of url() is a plain-text URL. Because we are using it here
-  // in an HTML argument context, we need to encode it properly.
-  $url = String::checkPlain(_url($variables['path'], $variables['options']));
-
-  // Sanitize the link text if necessary.
-  $text = $variables['options']['html'] ? $variables['text'] : String::checkPlain($variables['text']);
-  return SafeMarkup::set('<a href="' . $url . '"' . $attributes . '>' . $text . '</a>');
 }
 
 /**
@@ -753,7 +522,7 @@ function _drupal_add_html_head_link($attributes, $header = FALSE) {
 
   if ($header) {
     // Also add a HTTP header "Link:".
-    $href = '<' . String::checkPlain($attributes['href']) . '>;';
+    $href = '<' . SafeMarkup::checkPlain($attributes['href']) . '>;';
     unset($attributes['href']);
     $element['#attached']['http_header'][] = array('Link',  $href . drupal_http_header_attributes($attributes), TRUE);
   }
@@ -769,61 +538,6 @@ function _drupal_add_html_head_link($attributes, $header = FALSE) {
  */
 function drupal_clear_css_cache() {
   \Drupal::service('asset.css.collection_optimizer')->deleteAll();
-}
-
-/**
- * Prepares a string for use as a valid HTML ID and guarantees uniqueness.
- *
- * This function ensures that each passed HTML ID value only exists once on the
- * page. By tracking the already returned ids, this function enables forms,
- * blocks, and other content to be output multiple times on the same page,
- * without breaking (X)HTML validation.
- *
- * For already existing IDs, a counter is appended to the ID string. Therefore,
- * JavaScript and CSS code should not rely on any value that was generated by
- * this function and instead should rely on manually added CSS classes or
- * similarly reliable constructs.
- *
- * Two consecutive hyphens separate the counter from the original ID. To manage
- * uniqueness across multiple Ajax requests on the same page, Ajax requests
- * POST an array of all IDs currently present on the page, which are used to
- * prime this function's cache upon first invocation.
- *
- * To allow reverse-parsing of IDs submitted via Ajax, any multiple consecutive
- * hyphens in the originally passed $id are replaced with a single hyphen.
- *
- * @param $id
- *   The ID to clean.
- *
- * @return
- *   The cleaned ID.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.0.
- *   Use \Drupal\Component\Utility\Html::getUniqueId()
- */
-function drupal_html_id($id) {
-  return Html::getUniqueId($id);
-}
-
-/**
- * Prepares a string for use as a valid HTML ID.
- *
- * Only use this function when you want to intentionally skip the uniqueness
- * guarantee of drupal_html_id().
- *
- * @param string $id
- *   The ID to clean.
- *
- * @return string
- *   The cleaned ID.
- *
- * @see drupal_html_id()
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.0.
- *   Use \Drupal\Component\Utility\Html::getId()
- */
-function drupal_clean_id_identifier($id) {
-  return Html::getId($id);
 }
 
 /**
@@ -896,7 +610,7 @@ function drupal_js_defaults($data = NULL) {
  *   \Drupal\Core\Render\Renderer::mergeAttachments() instead.
  */
 function drupal_merge_attached(array $a, array $b) {
-  return Renderer::mergeAttachments($a, $b);
+  return \Drupal::service('renderer')->mergeAttachments($a, $b);
 }
 
 /**
@@ -1269,7 +983,8 @@ function drupal_clear_js_cache() {
 /**
  * Pre-render callback: Renders a link into #markup.
  *
- * @deprecated Use \Drupal\Core\Render\Element\Link::preRenderLink().
+ * @deprecated in Drupal 8.x, will be removed before Drupal 9.0.
+ *   Use \Drupal\Core\Render\Element\Link::preRenderLink().
  */
 function drupal_pre_render_link($element) {
   return Element\Link::preRenderLink($element);
@@ -1424,9 +1139,9 @@ function drupal_render_children(&$element, $children_keys = NULL) {
 /**
  * Renders an element.
  *
- * This function renders an element using drupal_render(). The top level
- * element is shown with show() before rendering, so it will always be rendered
- * even if hide() had been previously used on it.
+ * This function renders an element. The top level element is shown with show()
+ * before rendering, so it will always be rendered even if hide() had been
+ * previously used on it.
  *
  * @param $element
  *   The element to be rendered.
@@ -1434,7 +1149,7 @@ function drupal_render_children(&$element, $children_keys = NULL) {
  * @return
  *   The rendered element.
  *
- * @see drupal_render()
+ * @see \Drupal\Core\Render\RendererInterface
  * @see show()
  * @see hide()
  */
@@ -1448,7 +1163,7 @@ function render(&$element) {
       return $element['#markup'];
     }
     show($element);
-    return drupal_render($element);
+    return \Drupal::service('renderer')->render($element);
   }
   else {
     // Safe-guard for inappropriate use of render() on flat variables: return
@@ -1515,9 +1230,9 @@ function show(&$element) {
 /**
  * Generates a render cache placeholder.
  *
- * This is used by drupal_pre_render_render_cache_placeholder() to generate
- * placeholders, but should also be called by #post_render_cache callbacks that
- * want to replace the placeholder with the final markup.
+ * This can be used to generate placeholders, and hence should also be used by
+ * #post_render_cache callbacks that want to replace the placeholder with the
+ * final markup.
  *
  * @param string $callback
  *   The #post_render_cache callback that will replace the placeholder with its
@@ -1532,28 +1247,11 @@ function show(&$element) {
  *
  * @throws \Exception
  *
- * @see \Drupal\Core\Render\Renderer::getFromCache()
+ * @deprecated in Drupal 8.0.x-dev, will be removed before Drupal 9.0.0.
+ *   Use \Drupal::service('renderer')->generateCachePlaceholder().
  */
 function drupal_render_cache_generate_placeholder($callback, array &$context) {
-  if (is_string($callback) && strpos($callback, '::') === FALSE) {
-    /** @var \Drupal\Core\Controller\ControllerResolverInterface $controller_resolver */
-    $controller_resolver = \Drupal::service('controller_resolver');
-    $callable = \Drupal::service('controller_resolver')->getControllerFromDefinition($callback);
-  }
-  else {
-   $callable = $callback;
-  }
-
-  if (!is_callable($callable)) {
-    throw new Exception(t('$callable must be a callable function or of the form service_id:method.'));
-  }
-
-  // Generate a unique token if one is not already provided.
-  $context += array(
-    'token' => \Drupal\Component\Utility\Crypt::randomBytesBase64(55),
-  );
-
-  return '<drupal-render-cache-placeholder callback="' . $callback . '" token="' . $context['token'] . '"></drupal-render-cache-placeholder>';
+  return \Drupal::service('renderer')->generateCachePlaceholder($callback, $context);
 }
 
 /**
@@ -1562,8 +1260,8 @@ function drupal_render_cache_generate_placeholder($callback, array &$context) {
  * @param $type
  *   An element type as defined by hook_element_info().
  *
- * @deprecated As of Drupal 8.0, use \Drupal::service('element_info')->getInfo()
- *   instead.
+ * @deprecated in Drupal 8.0.0, will be removed before Drupal 9.0.0.
+ *   Use \Drupal::service('element_info')->getInfo() instead.
  */
 function element_info($type) {
   return \Drupal::service('element_info')->getInfo($type);
@@ -1579,95 +1277,12 @@ function element_info($type) {
  * @param $default
  *   (Optional) The value to return if the element type does not specify a
  *   value for the property. Defaults to NULL.
+ *
+ * @deprecated in Drupal 8.0.0, will be removed before Drupal 9.0.0.
+ *   Use \Drupal::service('element_info')->getInfoProperty() instead.
  */
 function element_info_property($type, $property_name, $default = NULL) {
-  return (($info = element_info($type)) && array_key_exists($property_name, $info)) ? $info[$property_name] : $default;
-}
-
-/**
- * Checks if the key is a property.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::property().
- */
-function element_property($key) {
-  return Element::property($key);
-}
-
-/**
- * Gets properties of a structured array element (keys beginning with '#').
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::properties().
- */
-function element_properties($element) {
-  return Element::properties($element);
-}
-
-/**
- * Checks if the key is a child.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::child().
- */
-function element_child($key) {
-  return Element::child($key);
-}
-
-/**
- * Identifies the children of an element array, optionally sorted by weight.
- *
- * The children of a element array are those key/value pairs whose key does
- * not start with a '#'. See drupal_render() for details.
- *
- * @param $elements
- *   The element array whose children are to be identified.
- * @param $sort
- *   Boolean to indicate whether the children should be sorted by weight.
- *
- * @return
- *   The array keys of the element's children.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::children().
- */
-function element_children(&$elements, $sort = FALSE) {
-  return Element::children($elements, $sort);
-}
-
-/**
- * Returns the visible children of an element.
- *
- * @param $elements
- *   The parent element.
- *
- * @return
- *   The array keys of the element's visible children.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::getVisibleChildren().
- */
-function element_get_visible_children(array $elements) {
-  return Element::getVisibleChildren($elements);
-}
-
-/**
- * Sets HTML attributes based on element properties.
- *
- * @param $element
- *   The renderable element to process.
- * @param $map
- *   An associative array whose keys are element property names and whose values
- *   are the HTML attribute names to set for corresponding the property; e.g.,
- *   array('#propertyname' => 'attributename'). If both names are identical
- *   except for the leading '#', then an attribute name value is sufficient and
- *   no property name needs to be specified.
- *
- * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.
- *   Use \Drupal\Core\Render\Element::setAttributes().
- */
-function element_set_attributes(array &$element, array $map) {
-  Element::setAttributes($element, $map);
+  return \Drupal::service('element_info')->getInfoProperty($type, $property_name, $default);
 }
 
 /**
@@ -1831,12 +1446,12 @@ function _drupal_flush_css_js() {
  *   Label to prefix the data.
  * @param $print_r
  *   Flag to switch between print_r() and var_export() for data conversion to
- *   string. Set $print_r to TRUE when dealing with a recursive data structure
- *   as var_export() will generate an error.
+ *   string. Set $print_r to FALSE to use var_export() instead of print_r().
+ *   Passing recursive data structures to var_export() will generate an error.
  */
-function debug($data, $label = NULL, $print_r = FALSE) {
+function debug($data, $label = NULL, $print_r = TRUE) {
   // Print $data contents to string.
-  $string = String::checkPlain($print_r ? print_r($data, TRUE) : var_export($data, TRUE));
+  $string = SafeMarkup::checkPlain($print_r ? print_r($data, TRUE) : var_export($data, TRUE));
 
   // Display values with pre-formatting to increase readability.
   $string = '<pre>' . $string . '</pre>';

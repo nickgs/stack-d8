@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Hooks provided the Entity module.
+ * Hooks and documentation related to entities.
  */
 
 use Drupal\Core\Entity\FieldableEntityInterface;
@@ -12,6 +12,7 @@ use Drupal\Core\Entity\DynamicallyFieldableEntityStorageInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Render\Element;
 use Drupal\language\Entity\ContentLanguageSettings;
+use Drupal\node\Entity\NodeType;
 
 /**
  * @defgroup entity_crud Entity CRUD, editing, and view hooks
@@ -150,10 +151,6 @@ use Drupal\language\Entity\ContentLanguageSettings;
  * - hook_ENTITY_TYPE_prepare_form()
  * - hook_entity_form_display_alter() (for content entities only)
  *
- * Some specific entity types have additional hooks that are run during
- * various steps in the process:
- * - Node entities: hook_node_validate() and hook_submit().
- *
  * @section delete Delete operations
  * To delete one or more entities, load them and then delete them:
  * @code
@@ -258,7 +255,8 @@ use Drupal\language\Entity\ContentLanguageSettings;
  * user accounts, has only one bundle.
  *
  * The sections below have more information about entities and the Entity API;
- * for more detailed information, see https://drupal.org/developing/api/entity
+ * for more detailed information, see
+ * https://www.drupal.org/developing/api/entity.
  *
  * @section define Defining an entity type
  * Entity types are defined by modules, using Drupal's Plugin API (see the
@@ -267,8 +265,8 @@ use Drupal\language\Entity\ContentLanguageSettings;
  * - Choose a unique machine name, or ID, for your entity type. This normally
  *   starts with (or is the same as) your module's machine name. It should be
  *   as short as possible, and may not exceed 32 characters.
- * - Define an interface for your entity's get/set methods, extending either
- *   \Drupal\Core\Config\Entity\ConfigEntityInterface or
+ * - Define an interface for your entity's get/set methods, usually extending
+ *   either \Drupal\Core\Config\Entity\ConfigEntityInterface or
  *   \Drupal\Core\Entity\ContentEntityInterface.
  * - Define a class for your entity, implementing your interface and extending
  *   either \Drupal\Core\Config\Entity\ConfigEntityBase or
@@ -318,8 +316,7 @@ use Drupal\language\Entity\ContentLanguageSettings;
  * - For content entities, the annotation will refer to a number of database
  *   tables and their fields. These annotation properties, such as 'base_table',
  *   'data_table', 'entity_keys', etc., are documented on
- *   \Drupal\Core\Entity\EntityType. Your module will also need to set up its
- *   database tables using hook_schema().
+ *   \Drupal\Core\Entity\EntityType.
  * - For content entities that are displayed on their own pages, the annotation
  *   will refer to a 'uri_callback' function, which takes an object of the
  *   entity interface you have defined as its parameter, and returns routing
@@ -432,7 +429,7 @@ use Drupal\language\Entity\ContentLanguageSettings;
  * $query_service = $container->get('entity.query');
  * $query = $query_service->get('your_entity_type');
  * @endcode
- * If you need aggregation, there is an aggregate query avaialable, which
+ * If you need aggregation, there is an aggregate query available, which
  * implements \Drupal\Core\Entity\Query\QueryAggregateInterface:
  * @code
  * $query \Drupal::entityQueryAggregate('your_entity_type');
@@ -525,7 +522,14 @@ use Drupal\language\Entity\ContentLanguageSettings;
  *    The code of the language $entity is accessed in.
  *
  * @return \Drupal\Core\Access\AccessResultInterface
- *    The access result.
+ *    The access result. The final result is calculated by using
+ *    \Drupal\Core\Access\AccessResultInterface::orIf() on the result of every
+ *    hook_entity_access() and hook_ENTITY_TYPE_access() implementation, and the
+ *    result of the entity-specific checkAccess() method in the entity access
+ *    control handler. Be careful when writing generalized access checks shared
+ *    between routing and entity checks: routing uses the andIf() operator. So
+ *    returning an isNeutral() does not determine entity access at all but it
+ *    always ends up denying access while routing.
  *
  * @see \Drupal\Core\Entity\EntityAccessControlHandler
  * @see hook_entity_create_access()
@@ -551,7 +555,7 @@ function hook_entity_access(\Drupal\Core\Entity\EntityInterface $entity, $operat
  *    The code of the language $entity is accessed in.
  *
  * @return \Drupal\Core\Access\AccessResultInterface
- *    The access result.
+ *    The access result. hook_entity_access() has detailed documentation.
  *
  * @see \Drupal\Core\Entity\EntityAccessControlHandler
  * @see hook_ENTITY_TYPE_create_access()
@@ -622,12 +626,16 @@ function hook_ENTITY_TYPE_create_access(\Drupal\Core\Session\AccountInterface $a
  * Modules may implement this hook to add information to defined entity types,
  * as defined in \Drupal\Core\Entity\EntityTypeInterface.
  *
+ * To alter existing information or to add information dynamically, use
+ * hook_entity_type_alter().
+ *
  * @param \Drupal\Core\Entity\EntityTypeInterface[] $entity_types
  *   An associative array of all entity type definitions, keyed by the entity
  *   type name. Passed by reference.
  *
  * @see \Drupal\Core\Entity\Entity
  * @see \Drupal\Core\Entity\EntityTypeInterface
+ * @see hook_entity_type_alter()
  */
 function hook_entity_type_build(array &$entity_types) {
   /** @var $entity_types \Drupal\Core\Entity\EntityTypeInterface[] */
@@ -644,8 +652,12 @@ function hook_entity_type_build(array &$entity_types) {
  * \Drupal\Core\Entity\Annotation\EntityType and all the ones additionally
  * provided by modules can be altered here.
  *
- * Do not use this hook to add information to entity types, unless you are just
- * filling-in default values. Use hook_entity_type_build() instead.
+ * Do not use this hook to add information to entity types, unless one of the
+ * following is true:
+ * - You are filling in default values.
+ * - You need to dynamically add information only in certain circumstances.
+ * - Your hook needs to run after hook_entity_type_build() implementations.
+ * Use hook_entity_type_build() instead in all other cases.
  *
  * @param \Drupal\Core\Entity\EntityTypeInterface[] $entity_types
  *   An associative array of all entity type definitions, keyed by the entity
@@ -725,7 +737,7 @@ function hook_entity_bundle_info_alter(&$bundles) {
 function hook_entity_bundle_create($entity_type_id, $bundle) {
   // When a new bundle is created, the menu needs to be rebuilt to add the
   // Field UI menu item tabs.
-  \Drupal::service('router.builder_indicator')->setRebuildNeeded();
+  \Drupal::service('router.builder')->setRebuildNeeded();
 }
 
 /**
@@ -1315,7 +1327,9 @@ function hook_ENTITY_TYPE_view(array &$build, \Drupal\Core\Entity\EntityInterfac
  * structured content array, it may use this hook to add a #post_render
  * callback. Alternatively, it could also implement hook_preprocess_HOOK() for
  * the particular entity type template, if there is one (e.g., node.html.twig).
- * See drupal_render() and _theme() for details.
+ *
+ * See the @link themeable Default theme implementations topic @endlink and
+ * drupal_render() for details.
  *
  * @param array &$build
  *   A renderable array representing the entity content.
@@ -1325,10 +1339,10 @@ function hook_ENTITY_TYPE_view(array &$build, \Drupal\Core\Entity\EntityInterfac
  *   The entity view display holding the display options configured for the
  *   entity components.
  *
+ * @ingroup entity_crud
+ *
  * @see hook_entity_view()
  * @see hook_ENTITY_TYPE_view_alter()
- *
- * @ingroup entity_crud
  */
 function hook_entity_view_alter(array &$build, Drupal\Core\Entity\EntityInterface $entity, \Drupal\Core\Entity\Display\EntityViewDisplayInterface $display) {
   if ($build['#view_mode'] == 'full' && isset($build['an_additional_field'])) {
@@ -1351,7 +1365,9 @@ function hook_entity_view_alter(array &$build, Drupal\Core\Entity\EntityInterfac
  * structured content array, it may use this hook to add a #post_render
  * callback. Alternatively, it could also implement hook_preprocess_HOOK() for
  * the particular entity type template, if there is one (e.g., node.html.twig).
- * See drupal_render() and _theme() for details.
+ *
+ * See the @link themeable Default theme implementations topic @endlink and
+ * drupal_render() for details.
  *
  * @param array &$build
  *   A renderable array representing the entity content.
@@ -1361,10 +1377,10 @@ function hook_entity_view_alter(array &$build, Drupal\Core\Entity\EntityInterfac
  *   The entity view display holding the display options configured for the
  *   entity components.
  *
+ * @ingroup entity_crud
+ *
  * @see hook_ENTITY_TYPE_view()
  * @see hook_entity_view_alter()
- *
- * @ingroup entity_crud
  */
 function hook_ENTITY_TYPE_view_alter(array &$build, Drupal\Core\Entity\EntityInterface $entity, \Drupal\Core\Entity\Display\EntityViewDisplayInterface $display) {
   if ($build['#view_mode'] == 'full' && isset($build['an_additional_field'])) {
@@ -1847,6 +1863,7 @@ function hook_entity_field_access($operation, \Drupal\Core\Field\FieldDefinition
   if ($field_definition->getName() == 'field_of_interest' && $operation == 'edit') {
     return AccessResult::allowedIfHasPermission($account, 'update field of interest');
   }
+  return AccessResult::neutral();
 }
 
 /**
@@ -1906,7 +1923,7 @@ function hook_entity_extra_field_info() {
   $module_language_enabled = \Drupal::moduleHandler()->moduleExists('language');
   $description = t('Node module element');
 
-  foreach (node_type_get_types() as $bundle) {
+  foreach (NodeType::loadMultiple() as $bundle) {
 
     // Add also the 'language' select if Language module is enabled and the
     // bundle has multilingual support.
@@ -1944,7 +1961,7 @@ function hook_entity_extra_field_info() {
  */
 function hook_entity_extra_field_info_alter(&$info) {
   // Force node title to always be at the top of the list by default.
-  foreach (node_type_get_types() as $bundle) {
+  foreach (NodeType::loadMultiple() as $bundle) {
     if (isset($info['node'][$bundle->type]['form']['title'])) {
       $info['node'][$bundle->type]['form']['title']['weight'] = -20;
     }

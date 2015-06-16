@@ -7,14 +7,13 @@
 
 namespace Drupal\Core\Render;
 
+use Drupal\Component\Utility\Crypt;
 use Drupal\Component\Utility\NestedArray;
+use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Core\Cache\Cache;
-use Drupal\Core\Cache\CacheContexts;
-use Drupal\Core\Cache\CacheFactoryInterface;
+use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Controller\ControllerResolverInterface;
 use Drupal\Core\Theme\ThemeManagerInterface;
-use Drupal\Component\Utility\SafeMarkup;
-use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Turns a render array into a HTML string.
@@ -43,25 +42,18 @@ class Renderer implements RendererInterface {
   protected $elementInfo;
 
   /**
-   * The request stack.
+   * The render cache service.
    *
-   * @var \Symfony\Component\HttpFoundation\RequestStack
+   * @var \Drupal\Core\Render\RenderCacheInterface
    */
-  protected $requestStack;
+  protected $renderCache;
 
   /**
-   * The cache factory.
+   * The renderer configuration array.
    *
-   * @var \Drupal\Core\Cache\CacheFactoryInterface
+   * @var array
    */
-  protected $cacheFactory;
-
-  /**
-   * The cache contexts service.
-   *
-   * @var \Drupal\Core\Cache\CacheContexts
-   */
-  protected $cacheContexts;
+  protected $rendererConfig;
 
   /**
    * The stack containing bubbleable rendering metadata.
@@ -79,20 +71,17 @@ class Renderer implements RendererInterface {
    *   The theme manager.
    * @param \Drupal\Core\Render\ElementInfoManagerInterface $element_info
    *   The element info.
-   * @param \Symfony\Component\HttpFoundation\RequestStack $request_stack
-   *   The request stack.
-   * @param \Drupal\Core\Cache\CacheFactoryInterface $cache_factory
-   *   The cache factory.
-   * @param \Drupal\Core\Cache\CacheContexts $cache_contexts
-   *   The cache contexts service.
+   * @param \Drupal\Core\Render\RenderCacheInterface $render_cache
+   *   The render cache service.
+   * @param array $renderer_config
+   *   The renderer configuration array.
    */
-  public function __construct(ControllerResolverInterface $controller_resolver, ThemeManagerInterface $theme, ElementInfoManagerInterface $element_info, RequestStack $request_stack, CacheFactoryInterface $cache_factory, CacheContexts $cache_contexts) {
+  public function __construct(ControllerResolverInterface $controller_resolver, ThemeManagerInterface $theme, ElementInfoManagerInterface $element_info, RenderCacheInterface $render_cache, array $renderer_config) {
     $this->controllerResolver = $controller_resolver;
     $this->theme = $theme;
     $this->elementInfo = $element_info;
-    $this->requestStack = $request_stack;
-    $this->cacheFactory = $cache_factory;
-    $this->cacheContexts = $cache_contexts;
+    $this->renderCache = $render_cache;
+    $this->rendererConfig = $renderer_config;
   }
 
   /**
@@ -163,10 +152,25 @@ class Renderer implements RendererInterface {
     }
     static::$stack->push(new BubbleableMetadata());
 
+    // Set the bubbleable rendering metadata that has configurable defaults, if:
+    // - this is the root call, to ensure that the final render array definitely
+    //   has these configurable defaults, even when no subtree is render cached.
+    // - this is a render cacheable subtree, to ensure that the cached data has
+    //   the configurable defaults (which may affect the ID and invalidation).
+    if ($is_root_call || isset($elements['#cache']['keys'])) {
+      $required_cache_contexts = $this->rendererConfig['required_cache_contexts'];
+      if (isset($elements['#cache']['contexts'])) {
+        $elements['#cache']['contexts'] = Cache::mergeContexts($elements['#cache']['contexts'], $required_cache_contexts);
+      }
+      else {
+        $elements['#cache']['contexts'] = $required_cache_contexts;
+      }
+    }
+
     // Try to fetch the prerendered element from cache, run any
     // #post_render_cache callbacks and return the final markup.
-    if (isset($elements['#cache'])) {
-      $cached_element = $this->cacheGet($elements);
+    if (isset($elements['#cache']['keys'])) {
+      $cached_element = $this->renderCache->get($elements);
       if ($cached_element !== FALSE) {
         $elements = $cached_element;
         // Only when we're not in a root (non-recursive) drupal_render() call,
@@ -175,7 +179,16 @@ class Renderer implements RendererInterface {
         if ($is_root_call) {
           $this->processPostRenderCache($elements);
         }
+        // Mark the element markup as safe. If we have cached children, we need
+        // to mark them as safe too. The parent markup contains the child
+        // markup, so if the parent markup is safe, then the markup of the
+        // individual children must be safe as well.
         $elements['#markup'] = SafeMarkup::set($elements['#markup']);
+        if (!empty($elements['#cache_properties'])) {
+          foreach (Element::children($cached_element) as $key) {
+            SafeMarkup::set($cached_element[$key]['#markup']);
+          }
+        }
         // The render cache item contains all the bubbleable rendering metadata
         // for the subtree.
         $this->updateStack($elements);
@@ -185,6 +198,12 @@ class Renderer implements RendererInterface {
         return $elements['#markup'];
       }
     }
+    // Two-tier caching: track pre-bubbling elements' #cache for later
+    // comparison.
+    // @see \Drupal\Core\Render\RenderCacheInterface::get()
+    // @see \Drupal\Core\Render\RenderCacheInterface::set()
+    $pre_bubbling_elements = [];
+    $pre_bubbling_elements['#cache'] = isset($elements['#cache']) ? $elements['#cache'] : [];
 
     // If the default values for this element have not been loaded yet, populate
     // them.
@@ -206,6 +225,7 @@ class Renderer implements RendererInterface {
 
     // Defaults for bubbleable rendering metadata.
     $elements['#cache']['tags'] = isset($elements['#cache']['tags']) ? $elements['#cache']['tags'] : array();
+    $elements['#cache']['max-age'] = isset($elements['#cache']['max-age']) ? $elements['#cache']['max-age'] : Cache::PERMANENT;
     $elements['#attached'] = isset($elements['#attached']) ? $elements['#attached'] : array();
     $elements['#post_render_cache'] = isset($elements['#post_render_cache']) ? $elements['#post_render_cache'] : array();
 
@@ -233,7 +253,7 @@ class Renderer implements RendererInterface {
       $elements['#children'] = '';
     }
 
-    // @todo Simplify after https://drupal.org/node/2273925
+    // @todo Simplify after https://www.drupal.org/node/2273925.
     if (isset($elements['#markup'])) {
       $elements['#markup'] = SafeMarkup::set($elements['#markup']);
     }
@@ -343,9 +363,13 @@ class Renderer implements RendererInterface {
     // We've rendered this element (and its subtree!), now update the stack.
     $this->updateStack($elements);
 
-    // Cache the processed element if #cache is set.
-    if (isset($elements['#cache'])) {
-      $this->cacheSet($elements);
+    // Cache the processed element if both $pre_bubbling_elements and $elements
+    // have the metadata necessary to generate a cache ID.
+    if (isset($pre_bubbling_elements['#cache']['keys']) && isset($elements['#cache']['keys'])) {
+      if ($pre_bubbling_elements['#cache']['keys'] !== $elements['#cache']['keys']) {
+        throw new \LogicException('Cache keys may not be changed after initial setup. Use the contexts property instead to bubble additional metadata.');
+      }
+      $this->renderCache->set($elements, $pre_bubbling_elements);
     }
 
     // Only when we're in a root (non-recursive) drupal_render() call,
@@ -469,114 +493,9 @@ class Renderer implements RendererInterface {
   }
 
   /**
-   * Gets the cached, prerendered element of a renderable element from the cache.
-   *
-   * @param array $elements
-   *   A renderable array.
-   *
-   * @return array
-   *   A renderable array, with the original element and all its children pre-
-   *   rendered, or FALSE if no cached copy of the element is available.
-   *
-   * @see ::render()
-   * @see ::saveToCache()
-   */
-  protected function cacheGet(array $elements) {
-    // Form submissions rely on the form being built during the POST request,
-    // and render caching of forms prevents this from happening.
-    // @todo remove the isMethodSafe() check when
-    //       https://www.drupal.org/node/2367555 lands.
-    if (!$this->requestStack->getCurrentRequest()->isMethodSafe() || !$cid = $this->createCacheID($elements)) {
-      return FALSE;
-    }
-    $bin = isset($elements['#cache']['bin']) ? $elements['#cache']['bin'] : 'render';
-
-    if (!empty($cid) && $cache = $this->cacheFactory->get($bin)->get($cid)) {
-      $cached_element = $cache->data;
-      // Return the cached element.
-      return $cached_element;
-    }
-    return FALSE;
-  }
-
-  /**
-   * Caches the rendered output of a renderable element.
-   *
-   * This is called by ::render() if the #cache property is set on an element.
-   *
-   * @param array $elements
-   *   A renderable array.
-   *
-   * @return bool|null
-   *  Returns FALSE if no cache item could be created, NULL otherwise.
-   *
-   * @see ::getFromCache()
-   */
-  protected function cacheSet(array &$elements) {
-    // Form submissions rely on the form being built during the POST request,
-    // and render caching of forms prevents this from happening.
-    // @todo remove the isMethodSafe() check when
-    //       https://www.drupal.org/node/2367555 lands.
-    if (!$this->requestStack->getCurrentRequest()->isMethodSafe() || !$cid = $this->createCacheID($elements)) {
-      return FALSE;
-    }
-
-    $data = $this->getCacheableRenderArray($elements);
-
-    // Cache tags are cached, but we also want to assocaite the "rendered" cache
-    // tag. This allows us to invalidate the entire render cache, regardless of
-    // the cache bin.
-    $data['#cache']['tags'][] = 'rendered';
-
-    $bin = isset($elements['#cache']['bin']) ? $elements['#cache']['bin'] : 'render';
-    $expire = isset($elements['#cache']['expire']) ? $elements['#cache']['expire'] : Cache::PERMANENT;
-    $this->cacheFactory->get($bin)->set($cid, $data, $expire, $data['#cache']['tags']);
-  }
-
-  /**
-   * Creates the cache ID for a renderable element.
-   *
-   * This creates the cache ID string, either by returning the #cache['cid']
-   * property if present or by building the cache ID out of the #cache['keys'].
-   *
-   * @param array $elements
-   *   A renderable array.
-   *
-   * @return string
-   *   The cache ID string, or FALSE if the element may not be cached.
-   */
-  protected function createCacheID(array $elements) {
-    if (isset($elements['#cache']['cid'])) {
-      return $elements['#cache']['cid'];
-    }
-    elseif (isset($elements['#cache']['keys'])) {
-      // Cache keys may either be static (just strings) or tokens (placeholders
-      // that are converted to static keys by the @cache_contexts service,
-      // depending on the request).
-      $keys = $this->cacheContexts->convertTokensToKeys($elements['#cache']['keys']);
-      return implode(':', $keys);
-    }
-    return FALSE;
-  }
-
-  /**
    * {@inheritdoc}
    */
-  public function getCacheableRenderArray(array $elements) {
-    return [
-      '#markup' => $elements['#markup'],
-      '#attached' => $elements['#attached'],
-      '#post_render_cache' => $elements['#post_render_cache'],
-      '#cache' => [
-        'tags' => $elements['#cache']['tags'],
-      ],
-    ];
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public static function mergeBubbleableMetadata(array $a, array $b) {
+  public function mergeBubbleableMetadata(array $a, array $b) {
     $meta_a = BubbleableMetadata::createFromRenderArray($a);
     $meta_b = BubbleableMetadata::createFromRenderArray($b);
     $meta_a->merge($meta_b)->applyTo($a);
@@ -586,15 +505,55 @@ class Renderer implements RendererInterface {
   /**
    * {@inheritdoc}
    */
-  public static function mergeAttachments(array $a, array $b) {
+  public function addCacheableDependency(array &$elements, $dependency) {
+    $meta_a = CacheableMetadata::createFromRenderArray($elements);
+    $meta_b = CacheableMetadata::createFromObject($dependency);
+    $meta_a->merge($meta_b)->applyTo($elements);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function mergeAttachments(array $a, array $b) {
     // If both #attached arrays contain drupalSettings, then merge them
     // correctly; adding the same settings multiple times needs to behave
     // idempotently.
     if (!empty($a['drupalSettings']) && !empty($b['drupalSettings'])) {
-      $a['drupalSettings'] = NestedArray::mergeDeepArray([$a['drupalSettings'], $b['drupalSettings']], TRUE);
+      $drupalSettings = NestedArray::mergeDeepArray(array($a['drupalSettings'], $b['drupalSettings']), TRUE);
+      // No need for re-merging them.
+      unset($a['drupalSettings']);
       unset($b['drupalSettings']);
     }
-    return NestedArray::mergeDeep($a, $b);
+    // Apply the normal merge.
+    $a = array_merge_recursive($a, $b);
+    if (isset($drupalSettings)) {
+      // Save the custom merge for the drupalSettings.
+      $a['drupalSettings'] = $drupalSettings;
+    }
+    return $a;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function generateCachePlaceholder($callback, array &$context) {
+    if (is_string($callback) && strpos($callback, '::') === FALSE) {
+      $callable = $this->controllerResolver->getControllerFromDefinition($callback);
+    }
+    else {
+      $callable = $callback;
+    }
+
+    if (!is_callable($callable)) {
+      throw new \InvalidArgumentException('$callable must be a callable function or of the form service_id:method.');
+    }
+
+    // Generate a unique token if one is not already provided.
+    $context += [
+      'token' => Crypt::randomBytesBase64(55),
+    ];
+
+    return '<drupal-render-cache-placeholder callback="' . $callback . '" token="' . $context['token'] . '"></drupal-render-cache-placeholder>';
   }
 
 }

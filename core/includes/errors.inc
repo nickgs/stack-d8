@@ -121,11 +121,11 @@ function _drupal_log_error($error, $fatal = FALSE) {
   // Initialize a maintenance theme if the bootstrap was not complete.
   // Do it early because drupal_set_message() triggers a
   // \Drupal\Core\Theme\ThemeManager::initTheme().
-  if ($fatal && drupal_get_bootstrap_phase() < DRUPAL_BOOTSTRAP_CODE) {
+  if ($fatal && \Drupal::hasService('theme.manager')) {
     // The installer initializes a maintenance theme at the earliest possible
     // point in time already. Do not unset that.
     if (!$is_installer) {
-      \Drupal::theme()->setActiveTheme(NULL);
+      \Drupal::theme()->resetActiveTheme();
     }
     if (!defined('MAINTENANCE_MODE')) {
       define('MAINTENANCE_MODE', 'error');
@@ -233,7 +233,7 @@ function _drupal_log_error($error, $fatal = FALSE) {
       // We fallback to a maintenance page at this point, because the page generation
       // itself can generate errors.
       // Should not translate the string to avoid errors producing more errors.
-      $message = 'The website has encountered an error. Please try again later.';
+      $message = 'The website encountered an unexpected error. Please try again later.';
       if ($is_installer) {
         // install_display_output() prints the output and ends script execution.
         $output = array(
@@ -258,8 +258,8 @@ function _drupal_log_error($error, $fatal = FALSE) {
 /**
  * Returns the current error level.
  *
- * This function should only be used to get the current error level prior to
- * DRUPAL_BOOTSTRAP_KERNEL or before Drupal is installed. In all other situations
+ * This function should only be used to get the current error level prior to the
+ * kernel being booted or before Drupal is installed. In all other situations
  * the following code is preferred:
  * @code
  * \Drupal::config('system.logging')->get('error_level');

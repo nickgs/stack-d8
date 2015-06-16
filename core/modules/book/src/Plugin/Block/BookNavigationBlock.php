@@ -99,15 +99,15 @@ class BookNavigationBlock extends BlockBase implements ContainerFactoryPluginInt
    */
   function blockForm($form, FormStateInterface $form_state) {
     $options = array(
-      'all pages' => t('Show block on all pages'),
-      'book pages' => t('Show block only on book pages'),
+      'all pages' => $this->t('Show block on all pages'),
+      'book pages' => $this->t('Show block only on book pages'),
     );
     $form['book_block_mode'] = array(
       '#type' => 'radios',
-      '#title' => t('Book navigation block display'),
+      '#title' => $this->t('Book navigation block display'),
       '#options' => $options,
       '#default_value' => $this->configuration['block_mode'],
-      '#description' => t("If <em>Show block on all pages</em> is selected, the block will contain the automatically generated menus for all of the site's books. If <em>Show block only on book pages</em> is selected, the block will contain only the one menu corresponding to the current page's book. In this case, if the current page is not in a book, no block will be displayed. The <em>Page specific visibility settings</em> or other visibility settings can be used in addition to selectively display this block."),
+      '#description' => $this->t("If <em>Show block on all pages</em> is selected, the block will contain the automatically generated menus for all of the site's books. If <em>Show block only on book pages</em> is selected, the block will contain only the one menu corresponding to the current page's book. In this case, if the current page is not in a book, no block will be displayed. The <em>Page specific visibility settings</em> or other visibility settings can be used in addition to selectively display this block."),
       );
 
     return $form;
@@ -181,27 +181,22 @@ class BookNavigationBlock extends BlockBase implements ContainerFactoryPluginInt
   /**
    * {@inheritdoc}
    */
-  public function getCacheKeys() {
-    // Add a key for the active book trail.
-    $current_bid = 0;
-    if ($node = $this->requestStack->getCurrentRequest()->get('node')) {
-      $current_bid = empty($node->book['bid']) ? 0 : $node->book['bid'];
-    }
-    if ($current_bid === 0) {
-      return parent::getCacheKeys();
-    }
-    $active_trail = $this->bookManager->getActiveTrailIds($node->book['bid'], $node->book);
-    $active_trail_key = 'trail.' . implode('|', $active_trail);
-    return array_merge(parent::getCacheKeys(), array($active_trail_key));
+  public function getCacheContexts() {
+    // The "Book navigation" block must be cached per role and book navigation
+    // context.
+    return [
+      'user.roles',
+      'route.book_navigation',
+    ];
   }
 
   /**
    * {@inheritdoc}
+   *
+   * @todo Make cacheable in https://www.drupal.org/node/2483181
    */
-  protected function getRequiredCacheContexts() {
-    // The "Book navigation" block must be cached per role: different roles may
-    // have access to different menu links.
-    return array('cache_context.user.roles');
+  public function getCacheMaxAge() {
+    return 0;
   }
 
 }

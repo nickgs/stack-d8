@@ -8,7 +8,6 @@
 namespace Drupal\views_ui;
 
 use Drupal\Component\Utility\SafeMarkup;
-use Drupal\Component\Utility\String;
 use Drupal\Component\Plugin\PluginManagerInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Config\Entity\ConfigEntityListBuilder;
@@ -99,7 +98,7 @@ class ViewListBuilder extends ConfigEntityListBuilder {
         ),
         'description' => array(
           'data' => array(
-            '#markup' => String::checkPlain($view->get('description')),
+            '#markup' => SafeMarkup::checkPlain($view->get('description')),
           ),
           'class' => array('views-table-filter-text-source'),
         ),
@@ -186,9 +185,10 @@ class ViewListBuilder extends ConfigEntityListBuilder {
 
     $list['filters']['text'] = array(
       '#type' => 'search',
-      '#title' => $this->t('Search'),
-      '#size' => 30,
-      '#placeholder' => $this->t('Enter view name'),
+      '#title' => $this->t('Filter'),
+      '#title_display' => 'invisible',
+      '#size' => 40,
+      '#placeholder' => $this->t('Filter by view name or description'),
       '#attributes' => array(
         'class' => array('views-filter-text'),
         'data-table' => '.views-listing-table',
@@ -263,10 +263,12 @@ class ViewListBuilder extends ConfigEntityListBuilder {
       if ($display->hasPath()) {
         $path = $display->getPath();
         if ($view->status() && strpos($path, '%') === FALSE) {
-          $all_paths[] = \Drupal::l('/' . $path, Url::fromUri('base://' . $path));
+          // @todo Views should expect and store a leading /. See:
+          //   https://www.drupal.org/node/2423913
+          $all_paths[] = \Drupal::l('/' . $path, Url::fromUserInput('/' . $path));
         }
         else {
-          $all_paths[] = String::checkPlain('/' . $path);
+          $all_paths[] = SafeMarkup::checkPlain('/' . $path);
         }
       }
     }
