@@ -4,6 +4,7 @@ use Drupal\Component\Utility\Crypt;
 use Drupal\Component\Utility\SafeMarkup;
 use Drupal\Component\Utility\Unicode;
 use Drupal\Core\Asset\AttachedAssetsInterface;
+use Drupal\Core\Cache\Cache;
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Form\FormStateInterface;
@@ -25,6 +26,8 @@ use Drupal\user\UserInterface;
 
 /**
  * Maximum length of username text field.
+ *
+ * Keep this under 191 characters so we can use a unique constraint in MySQL.
  */
 const USERNAME_MAX_LENGTH = 60;
 
@@ -369,7 +372,7 @@ function user_user_view(array &$build, UserInterface $account, EntityViewDisplay
   if ($display->getComponent('member_for')) {
     $build['member_for'] = array(
       '#type' => 'item',
-      '#markup' => '<h4 class="label">' . t('Member for') . '</h4> ' . \Drupal::service('date.formatter')->formatInterval(REQUEST_TIME - $account->getCreatedTime()),
+      '#markup' => '<h4 class="label">' . t('Member for') . '</h4> ' . \Drupal::service('date.formatter')->formatTimeDiffSince($account->getCreatedTime()),
     );
   }
 }
@@ -413,12 +416,6 @@ function user_format_name(AccountInterface $account) {
  */
 function user_template_preprocess_default_variables_alter(&$variables) {
   $user = \Drupal::currentUser();
-
-  // If this function is called from the installer after Drupal has been
-  // installed then $user will not be set.
-  if (!is_object($user)) {
-    return;
-  }
 
   $variables['user'] = clone $user;
   // Remove password and session IDs, $form_state, since themes should not need nor see them.
@@ -571,7 +568,7 @@ function user_pass_reset_url($account, $options = array()) {
     array(
       'uid' => $account->id(),
       'timestamp' => $timestamp,
-      'hash' => user_pass_rehash($account->getPassword(), $timestamp, $account->getLastLoginTime(), $account->id()),
+      'hash' => user_pass_rehash($account, $timestamp),
     ),
     array(
       'absolute' => TRUE,
@@ -584,11 +581,7 @@ function user_pass_reset_url($account, $options = array()) {
  * Generates a URL to confirm an account cancellation request.
  *
  * @param \Drupal\user\UserInterface $account
- *   The user account object, which must contain at least the following
- *   properties:
- *   - uid: The user ID number.
- *   - pass: The hashed user password string.
- *   - login: The UNIX timestamp of the user's last login.
+ *   The user account object.
  * @param array $options
  *   (optional) A keyed array of settings. Supported options are:
  *   - langcode: A language code to be used when generating locale-sensitive
@@ -601,14 +594,14 @@ function user_pass_reset_url($account, $options = array()) {
  * @see user_mail_tokens()
  * @see \Drupal\user\Controller\UserController::confirmCancel()
  */
-function user_cancel_url($account, $options = array()) {
+function user_cancel_url(UserInterface $account, $options = array()) {
   $timestamp = REQUEST_TIME;
   $langcode = isset($options['langcode']) ? $options['langcode'] : $account->getPreferredLangcode();
   $url_options = array('absolute' => TRUE, 'language' => \Drupal::languageManager()->getLanguage($langcode));
   return \Drupal::url('user.cancel_confirm', [
     'user' => $account->id(),
     'timestamp' => $timestamp,
-    'hashed_pass' => user_pass_rehash($account->getPassword(), $timestamp, $account->getLastLoginTime(), $account->id())
+    'hashed_pass' => user_pass_rehash($account, $timestamp)
   ], $url_options);
 }
 
@@ -618,26 +611,26 @@ function user_cancel_url($account, $options = array()) {
  * This hash is normally used to build a unique and secure URL that is sent to
  * the user by email for purposes such as resetting the user's password. In
  * order to validate the URL, the same hash can be generated again, from the
- * same information, and compared to the hash value from the URL. The URL
- * normally contains both the time stamp and the numeric user ID. The login
- * timestamp and hashed password are retrieved from the database as necessary.
+ * same information, and compared to the hash value from the URL. The hash
+ * contains the time stamp, the user's last login time, the numeric user ID,
+ * and the user's email address.
  * For a usage example, see user_cancel_url() and
  * \Drupal\user\Controller\UserController::confirmCancel().
  *
- * @param string $password
- *   The hashed user account password value.
+ * @param \Drupal\user\UserInterface $account
+ *   An object containing the user account.
  * @param int $timestamp
  *   A UNIX timestamp, typically REQUEST_TIME.
- * @param int $login
- *   The UNIX timestamp of the user's last login.
- * @param int $uid
- *   The user ID.
  *
  * @return string
  *   A string that is safe for use in URLs and SQL statements.
  */
-function user_pass_rehash($password, $timestamp, $login, $uid) {
-  return Crypt::hmacBase64($timestamp . $login . $uid, Settings::getHashSalt() . $password);
+function user_pass_rehash(UserInterface $account, $timestamp) {
+  $data = $timestamp;
+  $data .= $account->getLastLoginTime();
+  $data .= $account->id();
+  $data .= $account->getEmail();
+  return Crypt::hmacBase64($data, Settings::getHashSalt() . $account->getPassword());
 }
 
 /**
@@ -882,7 +875,7 @@ function user_view($account, $view_mode = 'full', $langcode = NULL) {
  * @param \Drupal\user\UserInterface[] $account
  *   An array of user accounts as returned by User::loadMultiple().
  * @param string $view_mode
- *   (optional) View mode, e.g., 'full', 'teaser'... Defaults to 'teaser'.
+ *   (optional) View mode, e.g., 'full', 'teaser', etc. Defaults to 'teaser.'
  * @param string|null $langcode
  *   (optional) A language code to use for rendering. Defaults to the global
  *   content language of the current request.
@@ -1317,6 +1310,7 @@ function user_toolbar() {
   $user = \Drupal::currentUser();
 
   // Add logout & user account links or login link.
+  $links_cache_contexts = [];
   if ($user->isAuthenticated()) {
     $links = array(
       'account' => array(
@@ -1338,6 +1332,8 @@ function user_toolbar() {
         'url' => Url::fromRoute('user.logout'),
       ),
     );
+    // The "Edit user account" link is per-user.
+    $links_cache_contexts[] = 'user';
   }
   else {
      $links = array(
@@ -1358,10 +1354,21 @@ function user_toolbar() {
         'title' => t('My account'),
         'class' => array('toolbar-icon', 'toolbar-icon-user'),
       ),
+      '#cache' => [
+        'contexts' => [
+          // Cacheable per user, because the current user's name is shown.
+          'user',
+        ],
+      ],
     ),
     'tray' => array(
       '#heading' => t('User account actions'),
       'user_links' => array(
+        '#cache' => [
+          // Cacheable per "authenticated or not", because the links to
+          // display depend on that.
+          'contexts' => Cache::mergeContexts(array('user.roles:authenticated'), $links_cache_contexts),
+        ],
         '#theme' => 'links__toolbar_user',
         '#links' => $links,
         '#attributes' => array(
@@ -1413,6 +1420,7 @@ function user_logout() {
  *   - attributes: HTML attributes for the containing element.
  */
 function template_preprocess_user(&$variables) {
+  $variables['user'] = $variables['elements']['#user'];
   // Helpful $content variable for templates.
   foreach (Element::children($variables['elements']) as $key) {
     $variables['content'][$key] = $variables['elements'][$key];

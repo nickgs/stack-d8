@@ -9,13 +9,14 @@ namespace Drupal\Core\Entity;
 
 use Drupal\Core\Access\AccessibleInterface;
 use Drupal\Core\Cache\CacheableDependencyInterface;
+use Drupal\Core\Cache\RefinableCacheableDependencyInterface;
 
 /**
  * Defines a common interface for all entity objects.
  *
  * @ingroup entity_api
  */
-interface EntityInterface extends AccessibleInterface, CacheableDependencyInterface {
+interface EntityInterface extends AccessibleInterface, CacheableDependencyInterface, RefinableCacheableDependencyInterface {
 
   /**
    * Gets the entity UUID (Universally Unique Identifier).
@@ -160,23 +161,6 @@ interface EntityInterface extends AccessibleInterface, CacheableDependencyInterf
    *   An HTML string containing a link to the entity.
    */
   public function link($text = NULL, $rel = 'canonical', array $options = []);
-
-  /**
-   * Gets the internal path for this entity.
-   *
-   * self::url() will return the full path including any prefixes, fragments, or
-   * query strings. This path does not include those.
-   *
-   * @param string $rel
-   *   The link relationship type, for example: canonical or edit-form.
-   *
-   * @return string
-   *   The internal path for this entity.
-   *
-   * @deprecated in Drupal 8.x-dev, will be removed before Drupal 8.0.0. Use
-   *    static::urlInfo() instead.
-   */
-  public function getSystemPath($rel = 'canonical');
 
   /**
    * Indicates if a link template exists for a given key.
@@ -364,6 +348,19 @@ interface EntityInterface extends AccessibleInterface, CacheableDependencyInterf
    *   support renames.
    */
   public function getOriginalId();
+
+  /**
+   * Returns the cache tags that should be used to invalidate caches.
+   *
+   * This will not return additional cache tags added through addCacheTags().
+   *
+   * @return string[]
+   *   Set of cache tags.
+   *
+   * @see \Drupal\Core\Cache\RefinableCacheableDependencyInterface::addCacheTags()
+   * @see \Drupal\Core\Cache\CacheableDependencyInterface::getCacheTags()
+   */
+  public function getCacheTagsToInvalidate();
 
   /**
    * Sets the original ID.

@@ -14,6 +14,7 @@ use Drupal\Core\Link;
 use Drupal\Core\Url;
 use Drupal\Core\Utility\LinkGenerator;
 use Drupal\Tests\UnitTestCase;
+use Drupal\Core\DependencyInjection\ContainerBuilder;
 
 /**
  * @coversDefaultClass \Drupal\Core\Utility\LinkGenerator
@@ -43,6 +44,13 @@ class LinkGeneratorTest extends UnitTestCase {
   protected $moduleHandler;
 
   /**
+   * The mocked renderer service.
+   *
+   * @var \PHPUnit_Framework_MockObject_MockObject|\Drupal\Core\Render\RendererInterface
+   */
+  protected $renderer;
+
+  /**
    * The mocked URL Assembler service.
    *
    * @var \PHPUnit_Framework_MockObject_MockObject|\Drupal\Core\Utility\UnroutedUrlAssemblerInterface
@@ -67,8 +75,8 @@ class LinkGeneratorTest extends UnitTestCase {
 
     $this->urlGenerator = $this->getMock('\Drupal\Core\Routing\UrlGenerator', array(), array(), '', FALSE);
     $this->moduleHandler = $this->getMock('Drupal\Core\Extension\ModuleHandlerInterface');
-
-    $this->linkGenerator = new LinkGenerator($this->urlGenerator, $this->moduleHandler);
+    $this->renderer = $this->getMock('\Drupal\Core\Render\RendererInterface');
+    $this->linkGenerator = new LinkGenerator($this->urlGenerator, $this->moduleHandler, $this->renderer);
     $this->urlAssembler = $this->getMock('\Drupal\Core\Utility\UnroutedUrlAssemblerInterface');
   }
 
@@ -178,6 +186,37 @@ class LinkGeneratorTest extends UnitTestCase {
       ),
       'content' => 'Drupal',
     ), $result);
+  }
+
+  /**
+   * Tests the generate() method with a url containing double quotes.
+   *
+   * @covers ::generate
+   */
+  public function testGenerateUrlWithQuotes() {
+    $this->urlAssembler->expects($this->once())
+      ->method('assemble')
+      ->with('base:example', array('query' => array('foo' => '"bar"', 'zoo' => 'baz')) + $this->defaultOptions)
+      ->will($this->returnValue('/example?foo=%22bar%22&zoo=baz'));
+
+    $path_validator = $this->getMock('Drupal\Core\Path\PathValidatorInterface');
+    $container_builder = new ContainerBuilder();
+    $container_builder->set('path.validator', $path_validator);
+    \Drupal::setContainer($container_builder);
+
+    $path = '/example?foo="bar"&zoo=baz';
+    $url = Url::fromUserInput($path);
+    $url->setUrlGenerator($this->urlGenerator);
+    $url->setUnroutedUrlAssembler($this->urlAssembler);
+
+    $result = $this->linkGenerator->generate('Drupal', $url);
+
+    $this->assertLink(array(
+      'attributes' => array(
+        'href' => '/example?foo=%22bar%22&zoo=baz',
+      ),
+      'content' => 'Drupal',
+    ), $result, 1);
   }
 
   /**
@@ -332,7 +371,9 @@ class LinkGeneratorTest extends UnitTestCase {
       ),
     ), $result);
 
-    // Test that safe HTML is output inside the anchor tag unescaped.
+    // Test that safe HTML is output inside the anchor tag unescaped. The
+    // SafeMarkup::set() call is an intentional unit test for the interaction
+    // between SafeMarkup and the LinkGenerator.
     $url = new Url('test_route_5', array());
     $url->setUrlGenerator($this->urlGenerator);
     $result = $this->linkGenerator->generate(SafeMarkup::set('<em>HTML output</em>'), $url);
@@ -342,6 +383,7 @@ class LinkGeneratorTest extends UnitTestCase {
         'tag' => 'em',
       ),
     ), $result);
+    $this->assertTrue(strpos($result, '<em>HTML output</em>') !== FALSE);
   }
 
   /**
@@ -427,12 +469,12 @@ class LinkGeneratorTest extends UnitTestCase {
   }
 
   /**
-   * Tests the LinkGenerator's support for collecting cacheability metadata.
+   * Tests the LinkGenerator's support for collecting bubbleable metadata.
    *
    * @see \Drupal\Core\Utility\LinkGenerator::generate()
    * @see \Drupal\Core\Utility\LinkGenerator::generateFromLink()
    */
-  public function testGenerateCacheability() {
+  public function testGenerateBubbleableMetadata() {
     $options = ['query' => [], 'language' => NULL, 'set_active_class' => FALSE, 'absolute' => FALSE];
     $this->urlGenerator->expects($this->any())
       ->method('generateFromRoute')
@@ -449,14 +491,14 @@ class LinkGeneratorTest extends UnitTestCase {
     $this->assertSame($expected_link_markup, $this->linkGenerator->generate('Test', $url));
     $generated_link = $this->linkGenerator->generate('Test', $url, TRUE);
     $this->assertSame($expected_link_markup, $generated_link->getGeneratedLink());
-    $this->assertInstanceOf('\Drupal\Core\Cache\CacheableMetadata', $generated_link);
+    $this->assertInstanceOf('\Drupal\Core\Render\BubbleableMetadata', $generated_link);
 
     // Test ::generateFromLink().
     $link = new Link('Test', $url);
     $this->assertSame($expected_link_markup, $this->linkGenerator->generateFromLink($link));
     $generated_link = $this->linkGenerator->generateFromLink($link, TRUE);
     $this->assertSame($expected_link_markup, $generated_link->getGeneratedLink());
-    $this->assertInstanceOf('\Drupal\Core\Cache\CacheableMetadata', $generated_link);
+    $this->assertInstanceOf('\Drupal\Core\Render\BubbleableMetadata', $generated_link);
   }
 
   /**

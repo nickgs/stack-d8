@@ -15,6 +15,17 @@ use Drupal\Core\Form\FormStateInterface;
  * Formats as a pair of password fields, which do not validate unless the two
  * entered passwords match.
  *
+ * Usage example:
+ * @code
+ * $form['pass'] = array(
+ *   '#type' => 'password_confirm',
+ *   '#title' => t('Password'),
+ *   '#size' => 25,
+ * );
+ * @endcode
+ *
+ * @see \Drupal\Core\Render\Element\Password
+ *
  * @FormElement("password_confirm")
  */
 class PasswordConfirm extends FormElement {
@@ -26,6 +37,7 @@ class PasswordConfirm extends FormElement {
     $class = get_class($this);
     return array(
       '#input' => TRUE,
+      '#markup' => '',
       '#process' => array(
         array($class, 'processPasswordConfirm'),
       ),
@@ -53,6 +65,7 @@ class PasswordConfirm extends FormElement {
       '#value' => empty($element['#value']) ? NULL : $element['#value']['pass1'],
       '#required' => $element['#required'],
       '#attributes' => array('class' => array('password-field', 'js-password-field')),
+      '#error_no_message' => TRUE,
     );
     $element['pass2'] =  array(
       '#type' => 'password',
@@ -60,6 +73,7 @@ class PasswordConfirm extends FormElement {
       '#value' => empty($element['#value']) ? NULL : $element['#value']['pass2'],
       '#required' => $element['#required'],
       '#attributes' => array('class' => array('password-confirm', 'js-password-confirm')),
+      '#error_no_message' => TRUE,
     );
     $element['#element_validate'] = array(array(get_called_class(), 'validatePasswordConfirm'));
     $element['#tree'] = TRUE;

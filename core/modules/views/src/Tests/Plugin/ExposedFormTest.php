@@ -135,7 +135,7 @@ class ExposedFormTest extends ViewTestBase {
     $this->executeView($view);
     $exposed_form = $view->display_handler->getPlugin('exposed_form');
     $output = $exposed_form->renderExposedForm();
-    $this->setRawContent(drupal_render($output));
+    $this->setRawContent(\Drupal::service('renderer')->renderRoot($output));
 
     $this->assertFieldByXpath('//form/@id', $this->getExpectedExposedFormId($view), 'Expected form ID found.');
 
@@ -206,11 +206,7 @@ class ExposedFormTest extends ViewTestBase {
       'languages:language_interface',
       'entity_test_view_grants',
       'theme',
-      'url.query_args.pagers:0',
-      'url.query_args:items_per_page',
-      'url.query_args:offset',
-      'url.query_args:sort_order',
-      'url.query_args:sort_by',
+      'url.query_args',
       'languages:language_content'
     ];
 

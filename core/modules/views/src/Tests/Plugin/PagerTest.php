@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Definition of Drupal\views\Tests\Plugin\PagerTest.
+ * Contains \Drupal\views\Tests\Plugin\PagerTest.
  */
 
 namespace Drupal\views\Tests\Plugin;
@@ -261,7 +261,7 @@ class PagerTest extends PluginTestBase {
 
     // Test pager cache contexts.
     $this->drupalGet('test_pager_full');
-    $this->assertCacheContexts(['languages:language_interface', 'theme', 'timezone', 'url.query_args.pagers:0', 'user.node_grants:view']);
+    $this->assertCacheContexts(['languages:language_interface', 'theme', 'timezone', 'url.query_args', 'user.node_grants:view']);
   }
 
   /**
@@ -280,7 +280,7 @@ class PagerTest extends PluginTestBase {
     $view->setAjaxEnabled(TRUE);
     $view->pager = NULL;
     $output = $view->render();
-    $output = drupal_render($output);
+    $output = \Drupal::service('renderer')->renderRoot($output);
     $this->assertEqual(preg_match('/<ul class="pager">/', $output), 0, 'The pager is not rendered.');
   }
 

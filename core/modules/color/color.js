@@ -7,6 +7,14 @@
 
   "use strict";
 
+  /**
+   * Displays farbtastic color selector and initialize color administration UI.
+   *
+   * @type {Drupal~behavior}
+   *
+   * @prop {Drupal~behaviorAttach} attach
+   *   Attach color selection behavior to relevant context.
+   */
   Drupal.behaviors.color = {
     attach: function (context, settings) {
       var i;
@@ -49,7 +57,8 @@
           width.push(parseInt(gradient.css('width'), 10) / 10);
           // Add rows (or columns for horizontal gradients).
           // Each gradient line should have a height (or width for horizontal
-          // gradients) of 10px (because we divided the height/width by 10 above).
+          // gradients) of 10px (because we divided the height/width by 10
+          // above).
           for (j = 0; j < (settings.gradients[i].direction === 'vertical' ? height[i] : width[i]); ++j) {
             gradient.append('<div class="gradient-line"></div>');
           }
@@ -82,11 +91,23 @@
       /**
        * Shifts a given color, using a reference pair (ref in HSL).
        *
-       * This algorithm ensures relative ordering on the saturation and luminance
-       * axes is preserved, and performs a simple hue shift.
+       * This algorithm ensures relative ordering on the saturation and
+       * luminance axes is preserved, and performs a simple hue shift.
        *
        * It is also symmetrical. If: shift_color(c, a, b) === d, then
        * shift_color(d, b, a) === c.
+       *
+       * @function Drupal.color~shift_color
+       *
+       * @param {string} given
+       *   A hex color code to shift.
+       * @param {Array.<number>} ref1
+       *   First HSL color reference.
+       * @param {Array.<number>} ref2
+       *   Second HSL color reference.
+       *
+       * @return {string}
+       *   A hex color, shifted.
        */
       function shift_color(given, ref1, ref2) {
         var d;
@@ -129,6 +150,16 @@
 
       /**
        * Callback for Farbtastic when a new color is chosen.
+       *
+       * @param {HTMLElement} input
+       *   The input element where the color is chosen.
+       * @param {string} color
+       *   The color that was chosen through the input.
+       * @param {bool} propagate
+       *   Whether or not to propagate the color to a locked pair value
+       * @param {bool} colorScheme
+       *   Flag to indicate if the user is using a color scheme when changing
+       *   the color.
        */
       function callback(input, color, propagate, colorScheme) {
         var matched;
@@ -182,6 +213,9 @@
 
       /**
        * Focuses Farbtastic on a particular field.
+       *
+       * @param {jQuery.Event} e
+       *   The focus event on the field.
        */
       function focus(e) {
         var input = e.target;
@@ -203,7 +237,7 @@
       // Initialize color fields.
       form.find('.js-color-palette input.form-text')
         .each(function () {
-          // Extract palette field name
+          // Extract palette field name.
           this.key = this.id.substring(13);
 
           // Link to color picker temporarily to initialize.

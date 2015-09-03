@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Definition of Drupal\system\Tests\Common\AddFeedTest.
+ * Contains \Drupal\system\Tests\Common\AddFeedTest.
  */
 
 namespace Drupal\system\Tests\Common;
@@ -90,8 +90,7 @@ class AddFeedTest extends WebTestBase {
       '#url' => 'node',
       '#title' => '<>&"\'',
     );
-    $text = drupal_render($variables);
-    preg_match('/title="(.*?)"/', $text, $matches);
-    $this->assertEqual($matches[1], 'Subscribe to &amp;&quot;&#039;', 'feed_icon template escapes reserved HTML characters.');
+    $text = \Drupal::service('renderer')->renderRoot($variables);
+    $this->assertEqual(trim(strip_tags($text)), 'Subscribe to &lt;&gt;&amp;&quot;&#039;', 'feed_icon template escapes reserved HTML characters.');
   }
 }

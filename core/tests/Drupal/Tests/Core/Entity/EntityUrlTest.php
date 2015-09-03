@@ -110,7 +110,7 @@ class EntityUrlTest extends UnitTestCase {
    * @covers ::urlInfo
    *
    * @expectedException \Drupal\Core\Entity\Exception\UndefinedLinkTemplateException
-   * @expectedExceptionMessage No link template "canonical" found for the "test_entity_type" entity type
+   * @expectedExceptionMessage No link template 'canonical' found for the 'test_entity_type' entity type
    *
    * @dataProvider providerTestUrlInfoForInvalidLinkTemplate
    */
@@ -237,38 +237,6 @@ class EntityUrlTest extends UnitTestCase {
 
     $this->assertSame('/entity/test_entity_type/test_entity_id', $valid_entity->url());
     $this->assertSame('http://drupal/entity/test_entity_type/test_entity_id', $valid_entity->url('canonical', array('absolute' => TRUE)));
-  }
-
-  /**
-   * Tests the getPathByAlias() method.
-   *
-   * @covers ::getSystemPath
-   */
-  public function testGetSystemPath() {
-    $entity_type = $this->getMock('Drupal\Core\Entity\EntityTypeInterface');
-    $entity_type->expects($this->any())
-      ->method('getLinkTemplates')
-      ->will($this->returnValue(array(
-        'canonical' => 'entity.test_entity_type.canonical',
-      )));
-
-    $this->entityManager
-      ->expects($this->any())
-      ->method('getDefinition')
-      ->with('test_entity_type')
-      ->will($this->returnValue($entity_type));
-
-    $no_link_entity = $this->getMockForAbstractClass('Drupal\Core\Entity\Entity', array(array('id' => 'test_entity_id'), 'test_entity_type'));
-    $this->assertSame('', $no_link_entity->getSystemPath('banana'));
-
-    $this->urlGenerator->expects($this->once())
-      ->method('getPathFromRoute')
-      ->with('entity.test_entity_type.canonical', array('test_entity_type' => 'test_entity_id'))
-      ->will($this->returnValue('entity/test_entity_type/test_entity_id'));
-
-    $valid_entity = $this->getMockForAbstractClass('Drupal\Core\Entity\Entity', array(array('id' => 'test_entity_id'), 'test_entity_type'));
-
-    $this->assertSame('entity/test_entity_type/test_entity_id', $valid_entity->getSystemPath());
   }
 
   /**

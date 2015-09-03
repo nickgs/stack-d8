@@ -295,8 +295,8 @@ class ConfigImporterTest extends KernelTestBase {
 
     $logs = $this->configImporter->getErrors();
     $this->assertEqual(count($logs), 1);
-    $message = SafeMarkup::format('config_test entity with ID @name already exists', array('@name' => 'secondary'));
-    $this->assertEqual($logs[0], SafeMarkup::format('Unexpected error during import with operation @op for @name: @message.', array('@op' => 'create', '@name' => $name_primary, '@message' => $message)));
+    $message = SafeMarkup::format("'config_test' entity with ID '@name' already exists", array('@name' => 'secondary'));
+    $this->assertEqual($logs[0], SafeMarkup::format('Unexpected error during import with operation @op for @name: !message.', array('@op' => 'create', '@name' => $name_primary, '!message' => $message)));
   }
 
   /**
@@ -645,6 +645,31 @@ class ConfigImporterTest extends KernelTestBase {
       $this->assertEqual($e->getMessage(), 'There were errors validating the config synchronization.');
       $error_log = $this->configImporter->getErrors();
       $this->assertEqual(['The core.extension configuration does not exist.'], $error_log);
+    }
+  }
+
+  /**
+   * Tests install profile validation during configuration import.
+   *
+   * @see \Drupal\Core\EventSubscriber\ConfigImportSubscriber
+   */
+  public function testInstallProfile() {
+    $staging = $this->container->get('config.storage.staging');
+
+    $extensions = $staging->read('core.extension');
+    // Add an install profile.
+    $extensions['module']['standard'] = 0;
+
+    $staging->write('core.extension', $extensions);
+    try {
+      $this->configImporter->reset()->import();
+      $this->fail('ConfigImporterException not thrown; an invalid import was not stopped due to missing dependencies.');
+    }
+    catch (ConfigImporterException $e) {
+      $this->assertEqual($e->getMessage(), 'There were errors validating the config synchronization.');
+      $error_log = $this->configImporter->getErrors();
+      // Install profiles should not even be scanned at this point.
+      $this->assertEqual(['Unable to install the <em class="placeholder">standard</em> module since it does not exist.'], $error_log);
     }
   }
 

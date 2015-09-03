@@ -2,14 +2,12 @@
 
 /**
  * @file
- * Contains \Drupal\migrate_drupal\Tests\d6\MigrateUploadInstanceTest.
+ * Contains \Drupal\migrate_drupal\Tests\d6\MigrateUserPictureFieldTest.
  */
 
 namespace Drupal\migrate_drupal\Tests\d6;
 
 use Drupal\field\Entity\FieldStorageConfig;
-use Drupal\migrate\MigrateExecutable;
-use Drupal\migrate_drupal\Tests\d6\MigrateDrupal6TestBase;
 
 /**
  * User picture field migration.
@@ -25,9 +23,7 @@ class MigrateUserPictureFieldTest extends MigrateDrupal6TestBase {
    */
   protected function setUp() {
     parent::setUp();
-    $migration = entity_load('migration', 'd6_user_picture_field');
-    $executable = new MigrateExecutable($migration, $this);
-    $executable->import();
+    $this->executeMigration('d6_user_picture_field');
   }
 
   /**

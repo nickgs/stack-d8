@@ -117,7 +117,6 @@ final class Settings {
     $config = array();
     $databases = array();
 
-    // Make conf_path() available as local variable in settings.php.
     if (is_readable($app_root . '/' . $site_path . '/settings.php')) {
       require $app_root . '/' . $site_path . '/settings.php';
     }
@@ -171,7 +170,7 @@ final class Settings {
    */
   public static function getApcuPrefix($identifier, $root, $site_path = '') {
     if (static::get('apcu_ensure_unique_prefix', TRUE)) {
-      return 'drupal.' . $identifier . '.' . hash_hmac('sha256', $identifier, static::get('hash_salt', $root . '/' . $site_path));
+      return 'drupal.' . $identifier . '.' . hash_hmac('sha256', $identifier, static::get('hash_salt') . '.' . $root . '/' . $site_path);
     }
     return 'drupal.' . $identifier . '.' . Crypt::hashBase64($root . '/' . $site_path);
   }

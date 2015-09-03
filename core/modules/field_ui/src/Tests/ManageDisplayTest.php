@@ -163,6 +163,11 @@ class ManageDisplayTest extends WebTestBase {
     $edit = array('fields[field_test][type]' => 'field_no_settings', 'refresh_rows' => 'field_test');
     $this->drupalPostAjaxForm(NULL, $edit, array('op' => t('Refresh')));
     $this->assertFieldByName('field_test_settings_edit');
+
+    // Make sure we can save the third party settings when there are no settings available
+    $this->drupalPostAjaxForm(NULL, array(), "field_test_settings_edit");
+    $this->drupalPostAjaxForm(NULL, $edit, "field_test_plugin_settings_update");
+
     // Uninstall the module providing third party settings and ensure the button
     // is no longer there.
     \Drupal::service('module_installer')->uninstall(array('field_third_party_test'));
@@ -454,7 +459,7 @@ class ManageDisplayTest extends WebTestBase {
     // Render a cloned node, so that we do not alter the original.
     $clone = clone $node;
     $element = node_view($clone, $view_mode);
-    $output = drupal_render($element);
+    $output = \Drupal::service('renderer')->renderRoot($element);
     $this->verbose(t('Rendered node - view mode: @view_mode', array('@view_mode' => $view_mode)) . '<hr />'. $output);
 
     // Assign content so that WebTestBase functions can be used.

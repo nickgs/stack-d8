@@ -2,13 +2,13 @@
 
 /**
  * @file
- * Contains Drupal\Core\PathProcessor\PathProcessorFront.
+ * Contains \Drupal\Core\PathProcessor\PathProcessorFront.
  */
 
 namespace Drupal\Core\PathProcessor;
 
-use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Render\BubbleableMetadata;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -39,7 +39,7 @@ class PathProcessorFront implements InboundPathProcessorInterface, OutboundPathP
    * Implements Drupal\Core\PathProcessor\InboundPathProcessorInterface::processInbound().
    */
   public function processInbound($path, Request $request) {
-    if (empty($path)) {
+    if ($path === '/') {
       $path = $this->config->get('system.site')->get('page.front');
     }
     return $path;
@@ -48,10 +48,10 @@ class PathProcessorFront implements InboundPathProcessorInterface, OutboundPathP
   /**
    * Implements Drupal\Core\PathProcessor\OutboundPathProcessorInterface::processOutbound().
    */
-  public function processOutbound($path, &$options = array(), Request $request = NULL, CacheableMetadata $cacheable_metadata = NULL) {
+  public function processOutbound($path, &$options = array(), Request $request = NULL, BubbleableMetadata $bubbleable_metadata = NULL) {
     // The special path '<front>' links to the default front page.
-    if ($path == '<front>') {
-      $path = '';
+    if ($path === '/<front>') {
+      $path = '/';
     }
     return $path;
   }

@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Definition of Drupal\views\Plugin\views\style\Table.
+ * Contains \Drupal\views\Plugin\views\style\Table.
  */
 
 namespace Drupal\views\Plugin\views\style;
@@ -444,8 +444,9 @@ class Table extends StylePluginBase implements CacheablePluginInterface {
 
     foreach ($this->options['info'] as $field_id => $info) {
       if (!empty($info['sortable'])) {
-        $contexts[] = 'url.query_args:order';
-        $contexts[] = 'url.query_args:sort';
+        // The rendered link needs to play well with any other query parameter
+        // used on the page, like pager and exposed filter.
+        $contexts[] = 'url.query_args';
         break;
       }
     }

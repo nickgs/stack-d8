@@ -2,10 +2,10 @@
 
 backbone:
   remote: https://github.com/jashkenas/backbone
-  version: "1.1.2"
+  version: "1.2.1"
   license:
     name: MIT
-    url: https://github.com/jashkenas/backbone/blob/1.1.2/LICENSE
+    url: https://github.com/jashkenas/backbone/blob/1.2.1/LICENSE
     gpl-compatible: true
   js:
     assets/vendor/backbone/backbone-min.js: { weight: -19, minified: true }
@@ -124,6 +124,7 @@ drupal.batch:
 drupal.collapse:
   version: VERSION
   js:
+    misc/details-aria.js: {}
     misc/collapse.js: {}
   dependencies:
     - core/jquery
@@ -131,6 +132,15 @@ drupal.collapse:
     - core/drupal
     - core/drupal.form
     - core/jquery.once
+
+drupal.date:
+  version: VERSION
+  js:
+    misc/date.js: {}
+  dependencies:
+    - core/drupal
+    - core/modernizr
+    - core/jquery.ui.datepicker
 
 drupal.debounce:
   version: VERSION
@@ -212,6 +222,7 @@ drupal.machine-name:
     - core/jquery.once
     - core/drupal
     - core/drupalSettings
+    - core/drupal.form
 
 drupal.progress:
   version: VERSION
@@ -384,10 +395,10 @@ jquery.joyride:
 
 jquery.once:
   remote: https://github.com/RobLoach/jquery-once
-  version: "2.0.1"
+  version: "2.0.2"
   license:
     name: GNU-GPL-2.0-or-later
-    url: https://github.com/RobLoach/jquery-once/blob/2.0.1/LICENSE.md
+    url: https://github.com/RobLoach/jquery-once/blob/2.0.2/LICENSE.md
     gpl-compatible: true
   js:
     assets/vendor/jquery-once/jquery.once.min.js: { weight: -19, minified: true }
